@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
 
+use log::{ info };
+
 pub const BIOS_SIZE: u32 = 512 * 1024;
 pub const BIOS_START: u32 = 0x1fc00000;
 const RANGE: Range = Range(BIOS_START, BIOS_SIZE);
@@ -14,6 +16,7 @@ pub struct BIOS {
 
 impl BIOS {
     pub fn new(path: &Path) -> std::io::Result<BIOS> {
+        info!("Reading BIOS from {}.", path.display());
         let file = File::open(path)?;
         let mut data = Vec::new();
 

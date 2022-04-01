@@ -2,11 +2,12 @@
 use crate::bios::BIOS_START;
 use crate::bus::Bus;
 use crate::instruction::{ Instruction, RegisterIndex };
-
+use log::{ debug, info };
 
 pub struct CPU {
     pc: u32,
-    next: Instruction,
+    next_pc: u32,
+    // next_instruction: Instruction,
     counter: u32,
     pending_load: (RegisterIndex, u32),
     bus: Bus,
@@ -26,7 +27,8 @@ impl CPU {
 
         CPU {
             pc: BIOS_START,
-            next: Instruction{ value: 0x00 },
+            next_pc: BIOS_START.wrapping_add(4),
+            // next_instruction: Instruction{ value: 0x00 },
             bus,
             counter: 0,
             pending_load: (RegisterIndex(0), 0),
@@ -73,20 +75,20 @@ impl CPU {
     }
 
     fn branch(&mut self, offset: u32) {
-        let mut pc = self.pc;
+        let mut pc = self.next_pc;
         pc = pc.wrapping_add(offset << 2);
         pc = pc.wrapping_sub(4);
-        self.pc = pc;
+        self.next_pc = pc;
 
     }
 
     fn decode_and_execute(&mut self, instruction: Instruction) {
         self.counter += 1;
-        println!("Executing: 0x{:02X}", instruction.opcode());
+        trace!("Executing instruction: 0x{:02X}", instruction.opcode());
 
         match instruction.opcode() {
             0x00 => {
-                println!("Executing secondary: 0x{:02X}", instruction.secondary_opcode());
+                trace!("secondary: 0x{:02X}", instruction.secondary_opcode());
                 match instruction.secondary_opcode() {
                     0x00 => self.op_sll(instruction),
                     0x02 => self.op_srl(instruction),
@@ -122,7 +124,6 @@ impl CPU {
             0x01 => self.op_bcondz(instruction),
             0x02 => self.op_j(instruction),
             0x03 => self.op_jal(instruction),
-
             0x04 => self.op_beq(instruction),
             0x05 => self.op_bne(instruction),
             0x06 => self.op_blez(instruction),
@@ -167,7 +168,7 @@ impl CPU {
 
         if test != 0 {
             if is_link {
-                self.set_register(RegisterIndex(31), self.pc);
+                self.set_register(RegisterIndex(31), self.next_pc);
             }
 
             self.branch(imm);
@@ -176,11 +177,11 @@ impl CPU {
 
     fn op_j(&mut self, instruction: Instruction) {
         let imm = instruction.imm_jump() << 2;
-        self.pc = (self.pc & 0xf0000000) | imm;
+        self.next_pc = (self.next_pc & 0xf0000000) | imm;
     }
 
     fn op_jal(&mut self, instruction: Instruction) {
-        self.set_register(RegisterIndex(31), self.pc);
+        self.set_register(RegisterIndex(31), self.next_pc);
         self.op_j(instruction);
     }
 
@@ -240,7 +241,7 @@ impl CPU {
     }
 
     fn op_cop0(&mut self, instruction: Instruction) {
-        println!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
+        debug!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
         match instruction.cop_opcode() {
             0x00 => self.op_mfc0(instruction),
             0x04 => self.op_mtc0(instruction),
@@ -254,8 +255,8 @@ impl CPU {
 
         let value = match cop_r.0 {
             12 => self.sr,
-            13 => panic!("unhandled cop0 CAUSE register read"),
-            _ => panic!("unhandled cop0 register read"),
+            13 => panic!("Unhandled read from cop0 CAUSE register."),
+            _ => panic!("Unhandled read from cop0 register."),
         };
 
         self.pending_load = (cpu_r, value);
@@ -270,16 +271,16 @@ impl CPU {
         match cop_r {
             RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
                 if value != 0 {
-                    self.panic_message(instruction, "Unhandled write to cop0r something xd")
+                    self.panic_message(instruction, "Unhandled write to cop0 register.")
                 }
             },
             RegisterIndex(12) => self.sr = value,
             RegisterIndex(13) => {
                 if value != 0 {
-                    self.panic_message(instruction, "Unhandled write to CAUSE register")
+                    self.panic_message(instruction, "Unhandled write to cop0 CAUSE register.")
                 }
             }
-            _ => self.panic_message(instruction, "Unhandled cop0 register")
+            _ => self.panic_message(instruction, "Unhandled cop0 register.")
         }
     }
 
@@ -306,16 +307,16 @@ impl CPU {
 
     fn op_jr(&mut self, instruction: Instruction) {
         let value = instruction.rs();
-        self.pc = self.register(value);
+        self.next_pc = self.register(value);
     }
 
     fn op_jalr(&mut self, instruction: Instruction) {
         let target = instruction.rd();
         let value = self.register(instruction.rs());
 
-        self.set_register(target, self.pc);
+        self.set_register(target, self.next_pc);
 
-        self.pc = value;
+        self.next_pc = value;
     }
 
     fn op_mfhi(&mut self, instruction: Instruction) {
@@ -524,7 +525,7 @@ impl CPU {
 
     fn op_sb(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring store while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -537,7 +538,7 @@ impl CPU {
 
     fn op_sh(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring store while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -550,7 +551,7 @@ impl CPU {
 
     fn op_sw(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring store while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -572,7 +573,7 @@ impl CPU {
 
     fn op_lh(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring load while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -586,7 +587,7 @@ impl CPU {
 
     fn op_lw(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring load while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -610,7 +611,7 @@ impl CPU {
 
     fn op_lhu(&mut self, instruction: Instruction) {
         if self.sr & 0x10000 != 0 {
-            println!("ignoring load while cache is isolated");
+            trace!("Ignoring load call while cache is isolated.");
             return;
         }
 
@@ -624,9 +625,10 @@ impl CPU {
     }
 
     pub fn exec_next_instruction(&mut self) {
-        let instruction = self.next;
-        self.next = Instruction { value: self.load32(self.pc)};
-        self.pc = self.pc.wrapping_add(4);
+        let instruction = Instruction { value: self.load32(self.pc)};
+
+        self.pc = self.next_pc;
+        self.next_pc = self.next_pc.wrapping_add(4);
 
         let (register, value) = self.pending_load;
         self.set_register(register, value);
@@ -639,15 +641,16 @@ impl CPU {
 
     #[allow(dead_code)]
     fn dump_registers(&self) {
+        debug!("Dumping registers:");
         for i in 0..self.input_registers.len() {
-            println!("Register {} = 0x{:08X}", i, self.input_registers[i])
+            debug!("    [{}] = 0x{:08X}", i, self.input_registers[i])
         }
     }
 
     fn panic(&self, instruction: Instruction) {
         // self.dump_registers();
         panic!(
-            "Panicked at instruction: {} \n Executed {} instructions.",
+            "Panicked at instruction: {} \nExecuted {} instructions.",
             instruction, self.counter
         );
     }
@@ -655,7 +658,7 @@ impl CPU {
     fn panic_message(&self, instruction: Instruction, message: &str) {
         // self.dump_registers();
         panic!(
-            "{} \nPanicked at instruction: {} \n Executed {} instructions.",
+            "{} \nPanicked at instruction: {} \nExecuted {} instructions.",
             message, instruction, self.counter
         );
     }
