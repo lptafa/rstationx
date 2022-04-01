@@ -20,7 +20,7 @@ const EXPANSION_1: Range = Range(0x1f000000, 8 * 1024 * 1024);
 const EXPANSION_2: Range = Range(0x1f802000, 66);
 const IRQ_CONTROL: Range = Range(0x1f801070, 8);
 const TIMERS: Range = Range(0x1f801100, 47);
-const IO: Range = Range(0x1f801100, 47);
+const IO: Range = Range(0x1f801000, 8 * 1024);
 
 use crate::{bios::BIOS, range::Range, ram::RAM};
 
@@ -57,7 +57,11 @@ impl Bus {
 
         if let Some(offset) = RAM::contains(addr) {
             return self.ram.load16(offset);
+        } else if let Some(_offset) = IO.contains(addr) {
+            trace!("Unhandled load16 from IO range.");
+            return 0x0;
         }
+
 
         panic!("Unhandled load16 at address 0x{:08X}", addr)
     }
@@ -78,7 +82,10 @@ impl Bus {
             trace!("Unhandled write to timer register: 0x{:08X}", offset);
             return 0;
         } else if let Some(_offset) = EXPANSION_1.contains(addr) {
-            trace!("Unhandled load8 at EXPANSION_1 range.");
+            trace!("Unhandled load32 at EXPANSION_1 range.");
+            return 0xff;
+        } else if let Some(_offset) = IO.contains(addr) {
+            trace!("Unhandled load32 at IO range.");
             return 0xff;
         }
         panic!("Unhandled load32 at address 0x{:08X}", addr)
@@ -133,6 +140,9 @@ impl Bus {
             self.ram.store32(offset, value);
         } else if let Some(offset) = IRQ_CONTROL.contains(addr) {
             debug!("Ignoring write to IRQ_CONTROL range: 0x{:08X}", offset);
+            return;
+        } else if let Some(_offset) = IO.contains(addr) {
+            trace!("Unhandled write to IO range.");
             return;
         } else {
             panic!("Unhandled write to address 0x{:08X}.", addr);

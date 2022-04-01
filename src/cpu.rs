@@ -6,8 +6,8 @@ use log::{ debug, info };
 
 pub struct CPU {
     pc: u32,
+    current_pc: u32,
     next_pc: u32,
-    // next_instruction: Instruction,
     counter: u32,
     pending_load: (RegisterIndex, u32),
     bus: Bus,
@@ -15,6 +15,11 @@ pub struct CPU {
     sr: u32,
     hi: u32,
     lo: u32,
+    cause: u32,
+    epc: u32,
+
+    branch: bool,
+    delay: bool,
 
     input_registers: [u32; 32],
     output_registers: [u32; 32],
@@ -27,8 +32,8 @@ impl CPU {
 
         CPU {
             pc: BIOS_START,
+            current_pc: BIOS_START,
             next_pc: BIOS_START.wrapping_add(4),
-            // next_instruction: Instruction{ value: 0x00 },
             bus,
             counter: 0,
             pending_load: (RegisterIndex(0), 0),
@@ -36,6 +41,12 @@ impl CPU {
             sr: 0,
             hi: 0x42042069,
             lo: 0x42042069,
+            cause: 0x69696969,
+            epc: 0xB00B1E5,
+
+            branch: false,
+            delay: false,
+
             input_registers: registers,
             output_registers: registers,
         }
@@ -96,6 +107,10 @@ impl CPU {
 
                     0x08 => self.op_jr(instruction),
                     0x09 => self.op_jalr(instruction),
+
+                    0x0C => self.op_syscall(instruction),
+                    0x0D => self.op_break(instruction),
+
                     0x10 => self.op_mfhi(instruction),
                     0x11 => self.op_mthi(instruction),
                     0x12 => self.op_mflo(instruction),
@@ -245,6 +260,7 @@ impl CPU {
         match instruction.cop_opcode() {
             0x00 => self.op_mfc0(instruction),
             0x04 => self.op_mtc0(instruction),
+            0x10 => self.op_rfe(instruction),
             _ => self.panic(instruction),
         }
     }
@@ -255,7 +271,8 @@ impl CPU {
 
         let value = match cop_r.0 {
             12 => self.sr,
-            13 => panic!("Unhandled read from cop0 CAUSE register."),
+            13 => self.cause,
+            14 => self.epc,
             _ => panic!("Unhandled read from cop0 register."),
         };
 
@@ -275,13 +292,22 @@ impl CPU {
                 }
             },
             RegisterIndex(12) => self.sr = value,
-            RegisterIndex(13) => {
-                if value != 0 {
-                    self.panic_message(instruction, "Unhandled write to cop0 CAUSE register.")
-                }
-            }
+            RegisterIndex(13) => self.cause = value,
+            RegisterIndex(14) => self.epc = value,
             _ => self.panic_message(instruction, "Unhandled cop0 register.")
         }
+    }
+
+    fn op_rfe(&mut self, instruction: Instruction) {
+        if instruction.value & 0x3f != 0x10 {
+            self.panic_message(instruction, "Invalid cop0 instruction.");
+        }
+
+        // <magic version=2>
+        let mode = self.sr & 0x3f;
+        self.sr &= !0x3f;
+        self.sr |= mode >> 2;
+        // </magic>
     }
 
     fn op_sll(&mut self, instruction: Instruction) {
@@ -317,6 +343,15 @@ impl CPU {
         self.set_register(target, self.next_pc);
 
         self.next_pc = value;
+    }
+
+    fn op_syscall(&mut self, _instruction: Instruction) {
+        self.exception(Exception::Syscall)
+    }
+
+    fn op_break(&mut self, _instruction: Instruction) {
+        self.exception(Exception::Break);
+        panic!("We know nothing in this world of ours.");
     }
 
     fn op_mfhi(&mut self, instruction: Instruction) {
@@ -624,16 +659,41 @@ impl CPU {
 
     }
 
+    fn exception(&mut self, cause: Exception) {
+        let handler = match self.sr & (1 << 22) != 0 {
+            true => 0xbfc00180,
+            false => 0x80000080,
+        };
+
+        // <magic version=1>
+        let mode = self.sr & 0x3f;
+        self.sr &= !0x3f;
+        self.sr |= (mode << 2) & 0x3f;
+        // </magic>
+
+        self.cause = (cause as u32) << 2;
+        self.epc = self.current_pc;
+
+        self.pc = handler;
+        self.next_pc = self.pc.wrapping_add(4);
+    }
+
     pub fn exec_next_instruction(&mut self) {
         let instruction = Instruction { value: self.load32(self.pc)};
+        self.current_pc = self.pc;
 
         self.pc = self.next_pc;
         self.next_pc = self.next_pc.wrapping_add(4);
 
+        self.delay = self.branch;
+        self.branch = false;
+
+        // <unsure>
         let (register, value) = self.pending_load;
         self.set_register(register, value);
 
         self.pending_load = (RegisterIndex(0), 0);
+        // </unsure>
 
         self.decode_and_execute(instruction);
         self.input_registers = self.output_registers;
@@ -662,4 +722,9 @@ impl CPU {
             message, instruction, self.counter
         );
     }
+}
+
+enum Exception {
+    Syscall = 0x8,
+    Break = 0x0,
 }
