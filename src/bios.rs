@@ -4,7 +4,7 @@ use std::io::{ErrorKind, Read};
 use std::path::Path;
 
 pub const BIOS_SIZE: u32 = 512 * 1024;
-pub const BIOS_START: u32 = 0xbfc00000;
+pub const BIOS_START: u32 = 0x1fc00000;
 const RANGE: Range = Range(BIOS_START, BIOS_SIZE);
 
 pub struct BIOS {

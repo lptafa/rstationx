@@ -29,7 +29,11 @@ impl Bus {
     }
 
     pub fn load32(&self, addr: u32) -> u32 {
+        let addr = mask_region(addr);
+
         expect_align(addr, 4);
+
+
         if let Some(offset) = BIOS::contains(addr) {
             return self.bios.load32(offset);
         } else if let Some(offset) = RAM::contains(addr) {
@@ -39,6 +43,7 @@ impl Bus {
     }
 
     pub fn store32(&mut self, addr: u32, value: u32) {
+        let addr = mask_region(addr);
         expect_align(addr, 4);
         println!("Storing 0x{:08X} to address 0x{:08X}", value, addr);
 

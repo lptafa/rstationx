@@ -1,7 +1,7 @@
 use crate::range::Range;
 
 pub const RAM_SIZE: usize = 2 * 1024 * 1024;
-const RANGE: Range = Range(0xa0000000, RAM_SIZE as u32);
+const RANGE: Range = Range(0x00000000, RAM_SIZE as u32);
 
 
 pub struct RAM {
