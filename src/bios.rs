@@ -33,6 +33,20 @@ impl BIOS {
         RANGE.contains(addr)
     }
 
+    pub fn load8(&self, offset: u32) -> u8 {
+        self.data[offset as usize]
+    }
+
+    pub fn load16(&self, offset: u32) -> u16 {
+        let offset = offset as usize;
+
+        let mut result = 0x0;
+        for byte_offset in 0..2 {
+            result = result | (self.data[offset + byte_offset] as u16) << (byte_offset * 8);
+        }
+        result
+    }
+
     pub fn load32(&self, offset: u32) -> u32 {
         let offset = offset as usize;
 
