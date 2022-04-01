@@ -3,12 +3,14 @@ mod bios;
 mod bus;
 mod cpu;
 mod instruction;
+mod ram;
 mod range;
 
 fn main() {
     let bios_path = std::path::Path::new("./bios/bios");
     let bios = bios::BIOS::new(bios_path).unwrap();
-    let bus = bus::Bus::new(bios);
+    let ram = ram::RAM::new();
+    let bus = bus::Bus::new(bios, ram);
     let mut cpu = cpu::CPU::new(bus);
     loop {
         cpu.exec_next_instruction();

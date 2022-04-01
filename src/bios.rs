@@ -5,9 +5,8 @@ use std::path::Path;
 
 pub const BIOS_SIZE: u32 = 512 * 1024;
 pub const BIOS_START: u32 = 0xbfc00000;
-pub const RANGE: Range = Range(BIOS_START, BIOS_SIZE);
+const RANGE: Range = Range(BIOS_START, BIOS_SIZE);
 
-#[derive(Debug)]
 pub struct BIOS {
     #[allow(dead_code)]
     data: Vec<u8>,

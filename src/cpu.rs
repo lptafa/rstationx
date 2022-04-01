@@ -8,8 +8,11 @@ pub struct CPU {
     next: Instruction,
     sr: u32,
     counter: u32,
-    registers: [u32; 32],
+    pending_load: (RegisterIndex, u32),
     bus: Bus,
+
+    input_registers: [u32; 32],
+    output_registers: [u32; 32],
 }
 
 impl CPU {
@@ -21,9 +24,11 @@ impl CPU {
             pc: BIOS_START,
             next: Instruction{ value: 0x00 },
             sr: 0,
-            registers,
             bus,
             counter: 0,
+            input_registers: registers,
+            output_registers: registers,
+            pending_load: (RegisterIndex(0), 0),
         }
     }
 
@@ -31,17 +36,17 @@ impl CPU {
         self.bus.load32(addr)
     }
 
-    fn store32(&self, addr: u32, value: u32) {
+    fn store32(&mut self, addr: u32, value: u32) {
         self.bus.store32(addr, value);
     }
 
     fn register(&self, index: RegisterIndex) -> u32 {
-        self.registers[index.0 as usize]
+        self.input_registers[index.0 as usize]
     }
 
     fn set_register(&mut self, index: RegisterIndex, value: u32) {
-        self.registers[index.0 as usize] = value;
-        self.registers[0] = 0;
+        self.output_registers[index.0 as usize] = value;
+        self.output_registers[0] = 0;
     }
 
     fn branch(&mut self, offset: u32) {
@@ -62,10 +67,17 @@ impl CPU {
                 match instruction.secondary_opcode() {
                     0x00 => self.op_sll(instruction),
 
+                    0x20 => self.op_add(instruction),
+                    0x21 => self.op_addu(instruction),
+                    0x22 => self.op_sub(instruction),
+                    0x23 => self.op_subu(instruction),
                     0x24 => self.op_and(instruction),
                     0x25 => self.op_or(instruction),
                     0x26 => self.op_xor(instruction),
                     0x27 => self.op_nor(instruction),
+
+                    0x2A => self.op_slt(instruction),
+                    0x2B => self.op_sltu(instruction),
 
                     _ => self.panic(instruction),
                 }
@@ -140,6 +152,23 @@ impl CPU {
         }
     }
 
+    fn op_slt(&mut self, instruction: Instruction) {
+        // let target = instruction.rd();
+        // let left = self.register(instruction.rs());
+        // let right = self.register(instruction.rt());
+
+        panic!("unhandled instruction slt");
+    }
+
+    fn op_sltu(&mut self, instruction: Instruction) {
+        let target = instruction.rd();
+        let left = self.register(instruction.rs());
+        let right = self.register(instruction.rt());
+
+        let result = left < right;
+        self.set_register(target, result as u32)
+    }
+
     fn op_cop0(&mut self, instruction: Instruction) {
         println!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
         match instruction.cop_opcode() {
@@ -155,8 +184,18 @@ impl CPU {
         let value = self.register(cpu_r);
 
         match cop_r {
+            RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
+                if value != 0 {
+                    self.panic_message(instruction, "Unhandled write to cop0r something xd")
+                }
+            },
             RegisterIndex(12) => self.sr = value,
-            RegisterIndex(x) => panic!("Unhandled cop0 register: {:08X}", x)
+            RegisterIndex(13) => {
+                if value != 0 {
+                    self.panic_message(instruction, "Unhandled write to CAUSE register")
+                }
+            }
+            _ => self.panic_message(instruction, "Unhandled cop0 register")
         }
     }
 
@@ -165,6 +204,40 @@ impl CPU {
         let value = self.register(instruction.rt());
         let shift = instruction.imm5();
         self.set_register(destination, value << shift);
+    }
+
+    fn op_add(&mut self, instruction: Instruction) {
+        // let target = instruction.rd();
+        // let left = self.register(instruction.rs());
+        // let right = self.register(instruction.rt());
+
+        // self.set_register(target, left & right);
+        panic!();
+    }
+
+    fn op_addu(&mut self, instruction: Instruction) {
+        let target = instruction.rd();
+        let left = self.register(instruction.rs());
+        let right = self.register(instruction.rt());
+
+        self.set_register(target, left.wrapping_add(right));
+    }
+
+    fn op_sub(&mut self, instruction: Instruction) {
+        // let target = instruction.rd();
+        // let left = self.register(instruction.rs());
+        // let right = self.register(instruction.rt());
+
+        // self.set_register(target, left & right);
+        panic!();
+    }
+
+    fn op_subu(&mut self, instruction: Instruction) {
+        let target = instruction.rd();
+        let left = self.register(instruction.rs());
+        let right = self.register(instruction.rt());
+
+        self.set_register(target, left.wrapping_sub(right));
     }
 
     fn op_and(&mut self, instruction: Instruction) {
@@ -285,20 +358,27 @@ impl CPU {
         let target_index = instruction.rt();
 
         let value = self.load32(base.wrapping_add(offset));
-        self.set_register(target_index, value);
+        self.pending_load = (target_index, value);
     }
 
     pub fn exec_next_instruction(&mut self) {
         let instruction = self.next;
         self.next = Instruction { value: self.load32(self.pc)};
         self.pc = self.pc.wrapping_add(4);
+
+        let (register, value) = self.pending_load;
+        self.set_register(register, value);
+
+        self.pending_load = (RegisterIndex(0), 0);
+
         self.decode_and_execute(instruction);
+        self.input_registers = self.output_registers;
     }
 
     #[allow(dead_code)]
     fn dump_registers(&self) {
-        for i in 0..self.registers.len() {
-            println!("Register {} = 0x{:08X}", i, self.registers[i])
+        for i in 0..self.input_registers.len() {
+            println!("Register {} = 0x{:08X}", i, self.input_registers[i])
         }
     }
 
@@ -307,6 +387,14 @@ impl CPU {
         panic!(
             "Panicked at instruction: {} \n Executed {} instructions.",
             instruction, self.counter
+        );
+    }
+
+    fn panic_message(&self, instruction: Instruction, message: &str) {
+        // self.dump_registers();
+        panic!(
+            "{} \nPanicked at instruction: {} \n Executed {} instructions.",
+            message, instruction, self.counter
         );
     }
 }

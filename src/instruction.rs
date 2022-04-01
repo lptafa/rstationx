@@ -1,5 +1,6 @@
 use core::fmt;
 
+#[derive(Clone, Copy)]
 pub struct RegisterIndex(pub u32);
 
 #[derive(Clone, Copy)]
