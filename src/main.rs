@@ -5,6 +5,7 @@ mod cpu;
 mod instruction;
 mod map;
 mod ram;
+mod utils;
 
 #[macro_use]
 extern crate log;

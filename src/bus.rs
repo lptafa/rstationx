@@ -5,6 +5,7 @@ use crate::bios::BIOS;
 use crate::map;
 use crate::map::MemoryRegion;
 use crate::ram::RAM;
+use crate::utils;
 
 pub struct Bus {
     bios: BIOS,
@@ -20,8 +21,8 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in load8");
 
         return match region {
-            MemoryRegion::BIOS => self.bios.load8(offset),
-            MemoryRegion::RAM => self.ram.load8(offset),
+            MemoryRegion::BIOS => utils::load8(&self.bios.data, offset),
+            MemoryRegion::RAM => utils::load8(&self.ram.data, offset),
             MemoryRegion::Expansion1 => {
                 trace!("Unhandled load8 at Expansion1 range.");
                 0xff
@@ -38,8 +39,8 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in load16");
 
         return match region {
-            MemoryRegion::BIOS => self.bios.load16(offset),
-            MemoryRegion::RAM => self.ram.load16(offset),
+            MemoryRegion::BIOS => utils::load16(&self.bios.data, offset),
+            MemoryRegion::RAM => utils::load16(&self.ram.data, offset),
             MemoryRegion::IO | MemoryRegion::SPU => {
                 trace!("Unhandled load16 at {:?} range.", region);
                 0x0
@@ -56,8 +57,8 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in load32");
 
         return match region {
-            MemoryRegion::BIOS => self.bios.load32(offset),
-            MemoryRegion::RAM => self.ram.load32(offset),
+            MemoryRegion::BIOS => utils::load32(&self.bios.data, offset),
+            MemoryRegion::RAM => utils::load32(&self.ram.data, offset),
             MemoryRegion::IRQControl | MemoryRegion::Timers => {
                 debug!("Ignoring read from {:?} range: 0x{:08X}", region, offset);
                 0
@@ -77,7 +78,7 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in store8");
 
         match region {
-            MemoryRegion::RAM => self.ram.store8(offset, value),
+            MemoryRegion::RAM => utils::store8(&mut self.ram.data, offset, value),
             MemoryRegion::Expansion1 | MemoryRegion::Expansion2 => {
                 debug!("Unhandled write to {:?} at offset 0x{:08X}", region, offset);
             }
@@ -93,7 +94,7 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in store16");
 
         match region {
-            MemoryRegion::RAM => self.ram.store16(offset, value),
+            MemoryRegion::RAM => utils::store16(&mut self.ram.data, offset, value),
             MemoryRegion::Timers | MemoryRegion::SPU => {
                 debug!("Unhandled write to {:?} register: 0x{:08X}", region, offset);
             }
@@ -109,7 +110,7 @@ impl Bus {
         let (region, offset) = map::find_region(addr).expect("Unknown memory region in store32");
 
         match region {
-            MemoryRegion::RAM => self.ram.store32(offset, value),
+            MemoryRegion::RAM => utils::store32(&mut self.ram.data, offset, value),
             MemoryRegion::BIOS => {
                 panic!("Illegal write to BIOS memory");
             }
@@ -134,7 +135,7 @@ impl Bus {
 fn expect_align(addr: u32, align: u32) {
     if addr % align != 0 {
         panic!(
-            "Unaligned memory access for address 0x{:08X}... exepected alignment of {}",
+            "Unaligned memory access for address 0x{:08X}... expected alignment of {}",
             addr, align
         );
     }
