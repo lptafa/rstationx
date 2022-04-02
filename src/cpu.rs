@@ -3,6 +3,7 @@ use crate::bus::Bus;
 use crate::instruction::{Instruction, RegisterIndex};
 use crate::map::BIOS_START;
 use log::debug;
+use std::string::String;
 
 pub struct CPU {
     pc: u32,
@@ -52,28 +53,28 @@ impl CPU {
         }
     }
 
-    fn load8(&self, addr: u32) -> u8 {
+    fn load8(&self, addr: u32) -> Result<u8, String> {
         self.bus.load8(addr)
     }
 
-    fn load16(&self, addr: u32) -> u16 {
+    fn load16(&self, addr: u32) -> Result<u16, String> {
         self.bus.load16(addr)
     }
 
-    fn load32(&self, addr: u32) -> u32 {
+    fn load32(&self, addr: u32) -> Result<u32, String> {
         self.bus.load32(addr)
     }
 
-    fn store8(&mut self, addr: u32, value: u8) {
-        self.bus.store8(addr, value);
+    fn store8(&mut self, addr: u32, value: u8) -> Result<(), String> {
+        self.bus.store8(addr, value)
     }
 
-    fn store16(&mut self, addr: u32, value: u16) {
-        self.bus.store16(addr, value);
+    fn store16(&mut self, addr: u32, value: u16) -> Result<(), String> {
+        self.bus.store16(addr, value)
     }
 
-    fn store32(&mut self, addr: u32, value: u32) {
-        self.bus.store32(addr, value);
+    fn store32(&mut self, addr: u32, value: u32) -> Result<(), String> {
+        self.bus.store32(addr, value)
     }
 
     fn register(&self, index: RegisterIndex) -> u32 {
@@ -92,7 +93,7 @@ impl CPU {
         self.next_pc = pc;
     }
 
-    fn decode_and_execute(&mut self, instruction: Instruction) {
+    fn decode_and_execute(&mut self, instruction: Instruction) -> Result<(), String> {
         self.counter += 1;
         trace!(
             "({}): Executing instruction: 0x{:02X}",
@@ -100,7 +101,7 @@ impl CPU {
             instruction.opcode()
         );
 
-        match instruction.opcode() {
+        return match instruction.opcode() {
             0x00 => {
                 trace!("secondary: 0x{:02X}", instruction.secondary_opcode());
                 match instruction.secondary_opcode() {
@@ -135,7 +136,7 @@ impl CPU {
                     0x2A => self.op_slt(instruction),
                     0x2B => self.op_sltu(instruction),
 
-                    _ => self.panic(instruction),
+                    op => Err(format!("Unhandled secondary opcode: 0x{:02x}", op)),
                 }
             }
 
@@ -155,9 +156,9 @@ impl CPU {
             0x0E => self.op_xori(instruction),
             0x0F => self.op_lui(instruction),
             0x10 => self.op_cop0(instruction),
-            0x11 => panic!("Call to missing coprocessor cop1"),
-            0x12 => panic!("Unimplemented call to GTE"),
-            0x13 => panic!("Call to missing coprocessor cop3"),
+            0x11 => Err(String::from("Call to missing coprocessor cop1")),
+            0x12 => Err(String::from("Unimplemented call to GTE")),
+            0x13 => Err(String::from("Call to missing coprocessor cop3")),
 
             0x20 => self.op_lb(instruction),
             0x21 => self.op_lh(instruction),
@@ -169,11 +170,11 @@ impl CPU {
             0x29 => self.op_sh(instruction),
             0x2B => self.op_sw(instruction),
 
-            _ => self.panic(instruction),
+            op => Err(format!("Unhandled opcode 0x{:02x}", op)),
         }
     }
 
-    fn op_bcondz(&mut self, instruction: Instruction) {
+    fn op_bcondz(&mut self, instruction: Instruction) -> Result<(), String> {
         let imm = instruction.imm16_se();
         let source = self.register(instruction.rs()) as i32;
 
@@ -191,19 +192,22 @@ impl CPU {
 
             self.branch(imm);
         }
+        Ok(())
     }
 
-    fn op_j(&mut self, instruction: Instruction) {
+    fn op_j(&mut self, instruction: Instruction) -> Result<(), String> {
         let imm = instruction.imm_jump() << 2;
         self.next_pc = (self.next_pc & 0xf0000000) | imm;
+        Ok(())
     }
 
-    fn op_jal(&mut self, instruction: Instruction) {
+    fn op_jal(&mut self, instruction: Instruction) -> Result<(), String> {
         self.set_register(RegisterIndex(31), self.next_pc);
-        self.op_j(instruction);
+        self.op_j(instruction)?;
+        Ok(())
     }
 
-    fn op_beq(&mut self, instruction: Instruction) {
+    fn op_beq(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
@@ -211,9 +215,10 @@ impl CPU {
         if left == right {
             self.branch(branch_offset);
         }
+        Ok(())
     }
 
-    fn op_bne(&mut self, instruction: Instruction) {
+    fn op_bne(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
@@ -221,57 +226,57 @@ impl CPU {
         if left != right {
             self.branch(branch_offset);
         }
+        Ok(())
     }
 
-    fn op_blez(&mut self, instruction: Instruction) {
+    fn op_blez(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
         let left = self.register(instruction.rs());
 
         if left <= 0x0 {
             self.branch(branch_offset);
         }
+        Ok(())
     }
 
-    fn op_bgtz(&mut self, instruction: Instruction) {
+    fn op_bgtz(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
         let left = self.register(instruction.rs());
 
         if left > 0x0 {
             self.branch(branch_offset);
         }
+        Ok(())
     }
 
-    fn op_slt(&mut self, instruction: Instruction) {
+    fn op_slt(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
 
-        self.set_register(target, (left < right) as u32)
+        Ok(self.set_register(target, (left < right) as u32))
     }
 
-    fn op_sltu(&mut self, instruction: Instruction) {
+    fn op_sltu(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
         let result = left < right;
-        self.set_register(target, result as u32)
+        Ok(self.set_register(target, result as u32))
     }
 
-    fn op_cop0(&mut self, instruction: Instruction) {
-        debug!(
-            "Executing cop0 instruction 0x{:08X}",
-            instruction.cop_opcode()
-        );
-        match instruction.cop_opcode() {
+    fn op_cop0(&mut self, instruction: Instruction) -> Result<(), String> {
+        debug!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
+        return match instruction.cop_opcode() {
             0x00 => self.op_mfc0(instruction),
             0x04 => self.op_mtc0(instruction),
             0x10 => self.op_rfe(instruction),
-            _ => self.panic(instruction),
+            _ => Err(String::from("Unhandled cop0 opcode")),
         }
     }
 
-    fn op_mfc0(&mut self, instruction: Instruction) {
+    fn op_mfc0(&mut self, instruction: Instruction) -> Result<(), String> {
         let cpu_r = instruction.rt();
         let cop_r = instruction.rd();
 
@@ -279,13 +284,14 @@ impl CPU {
             12 => self.sr,
             13 => self.cause,
             14 => self.epc,
-            _ => panic!("Unhandled read from cop0 register."),
+            _ => return Err(String::from("Unhandled read from cop0 register.")),
         };
 
         self.pending_load = (cpu_r, value);
+        Ok(())
     }
 
-    fn op_mtc0(&mut self, instruction: Instruction) {
+    fn op_mtc0(&mut self, instruction: Instruction) -> Result<(), String> {
         let cpu_r = instruction.rt();
         let cop_r = instruction.rd();
 
@@ -294,19 +300,20 @@ impl CPU {
         match cop_r {
             RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
                 if value != 0 {
-                    self.panic_message(instruction, "Unhandled write to cop0 register.")
+                    return Err(String::from("Unhandled write to cop0 register."))
                 }
             }
             RegisterIndex(12) => self.sr = value,
             RegisterIndex(13) => self.cause = value,
             RegisterIndex(14) => self.epc = value,
-            _ => self.panic_message(instruction, "Unhandled cop0 register."),
+            _ => return Err(String::from("Unhandled cop0 register.")),
         }
+        Ok(())
     }
 
-    fn op_rfe(&mut self, instruction: Instruction) {
+    fn op_rfe(&mut self, instruction: Instruction) -> Result<(), String> {
         if instruction.value & 0x3f != 0x10 {
-            self.panic_message(instruction, "Invalid cop0 instruction.");
+            return Err(String::from("Invalid cop0 instruction."));
         }
 
         // <magic version=2>
@@ -314,81 +321,88 @@ impl CPU {
         self.sr &= !0x3f;
         self.sr |= mode >> 2;
         // </magic>
+        Ok(())
     }
 
-    fn op_sll(&mut self, instruction: Instruction) {
+    fn op_sll(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
         let value = self.register(instruction.rt());
         let shift = instruction.imm5();
-        self.set_register(destination, value << shift);
+
+        Ok(self.set_register(destination, value << shift))
     }
 
-    fn op_srl(&mut self, instruction: Instruction) {
+    fn op_srl(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
         let value = self.register(instruction.rt());
         let shift = instruction.imm5();
-        self.set_register(destination, value >> shift);
+
+        Ok(self.set_register(destination, value >> shift))
     }
 
-    fn op_sra(&mut self, instruction: Instruction) {
+    fn op_sra(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
         let shift = instruction.imm5();
         let value = (self.register(instruction.rt()) as i32) >> shift;
-        self.set_register(destination, value as u32);
+
+        Ok(self.set_register(destination, value as u32))
     }
 
-    fn op_jr(&mut self, instruction: Instruction) {
+    fn op_jr(&mut self, instruction: Instruction) -> Result<(), String> {
         let value = instruction.rs();
         self.next_pc = self.register(value);
+        Ok(())
     }
 
-    fn op_jalr(&mut self, instruction: Instruction) {
+    fn op_jalr(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let value = self.register(instruction.rs());
 
         self.set_register(target, self.next_pc);
-
         self.next_pc = value;
+        Ok(())
     }
 
-    fn op_syscall(&mut self, _instruction: Instruction) {
+    fn op_syscall(&mut self, _instruction: Instruction) -> Result<(), String> {
         self.exception(Exception::Syscall)
     }
 
-    fn op_break(&mut self, _instruction: Instruction) {
-        self.exception(Exception::Break);
-        panic!("We know nothing in this world of ours.");
+    fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
+        self.exception(Exception::Break)?;
+        Err(String::from("We don't know the exception number for break."))
     }
 
-    fn op_mfhi(&mut self, instruction: Instruction) {
+    fn op_mfhi(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        self.set_register(destination, self.hi);
+        Ok(self.set_register(destination, self.hi))
     }
 
-    fn op_mthi(&mut self, instruction: Instruction) {
+    fn op_mthi(&mut self, instruction: Instruction) -> Result<(), String> {
         let source = self.register(instruction.rs());
         self.hi = source;
+        Ok(())
     }
 
-    fn op_mflo(&mut self, instruction: Instruction) {
+    fn op_mflo(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        self.set_register(destination, self.lo);
+        Ok(self.set_register(destination, self.lo))
     }
 
-    fn op_mtlo(&mut self, instruction: Instruction) {
+    fn op_mtlo(&mut self, instruction: Instruction) -> Result<(), String> {
         let source = self.register(instruction.rs());
         self.lo = source;
+        Ok(())
     }
 
-    fn op_mult(&mut self, _instruction: Instruction) {
-        panic!("mult")
+    fn op_mult(&mut self, _instruction: Instruction) -> Result<(), String> {
+        Err(String::from("Unimplemented mult"))
     }
 
-    fn op_multu(&mut self, _instruction: Instruction) {
-        panic!("multu")
+    fn op_multu(&mut self, _instruction: Instruction) -> Result<(), String> {
+        Err(String::from("Unimplemented multu"))
     }
 
-    fn op_div(&mut self, instruction: Instruction) {
+    fn op_div(&mut self, instruction: Instruction) -> Result<(), String> {
         let dimmadome = self.register(instruction.rs()) as i32;
         let divisor = self.register(instruction.rt()) as i32;
 
@@ -407,9 +421,10 @@ impl CPU {
             self.hi = (dimmadome % divisor) as u32;
             self.lo = (dimmadome / divisor) as u32;
         }
+        Ok(())
     }
 
-    fn op_divu(&mut self, instruction: Instruction) {
+    fn op_divu(&mut self, instruction: Instruction) -> Result<(), String> {
         let dimmadome = self.register(instruction.rs());
         let divisor = self.register(instruction.rt());
 
@@ -420,249 +435,256 @@ impl CPU {
             self.hi = dimmadome % divisor;
             self.lo = dimmadome / divisor;
         }
+        Ok(())
     }
 
-    fn op_add(&mut self, instruction: Instruction) {
+    fn op_add(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
 
         let value = match left.checked_add(right) {
             Some(value) => value as u32,
-            None => panic!("ADD overflow"),
+            None => return Err(String::from("ADD overflow")),
         };
 
-        self.set_register(target, value);
+        Ok(self.set_register(target, value))
     }
 
-    fn op_addu(&mut self, instruction: Instruction) {
+    fn op_addu(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, left.wrapping_add(right));
+        Ok(self.set_register(target, left.wrapping_add(right)))
     }
 
-    fn op_sub(&mut self, instruction: Instruction) {
+    fn op_sub(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
 
         let value = match left.checked_sub(right) {
             Some(value) => value as u32,
-            None => panic!("ADD overflow"),
+            None => return Err(String::from("ADD overflow")),
         };
 
-        self.set_register(target, value);
+        Ok(self.set_register(target, value))
     }
 
-    fn op_subu(&mut self, instruction: Instruction) {
+    fn op_subu(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, left.wrapping_sub(right));
+        Ok(self.set_register(target, left.wrapping_sub(right)))
     }
 
-    fn op_and(&mut self, instruction: Instruction) {
+    fn op_and(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, left & right);
+        Ok(self.set_register(target, left & right))
     }
 
-    fn op_or(&mut self, instruction: Instruction) {
+    fn op_or(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, left | right);
+        Ok(self.set_register(target, left | right))
     }
 
-    fn op_xor(&mut self, instruction: Instruction) {
+    fn op_xor(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, left ^ right);
+        Ok(self.set_register(target, left ^ right))
     }
 
-    fn op_nor(&mut self, instruction: Instruction) {
+    fn op_nor(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
-        self.set_register(target, !(left | right));
+        Ok(self.set_register(target, !(left | right)))
     }
 
-    fn op_addi(&mut self, instruction: Instruction) {
+    fn op_addi(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let imm = instruction.imm16_se() as i32;
         let source = self.register(instruction.rs()) as i32;
 
         let value = match source.checked_add(imm) {
             Some(value) => value as u32,
-            None => panic!("ADDI overflow"),
+            None => return Err(String::from("ADDI overflow")),
         };
 
-        self.set_register(target, value);
+        Ok(self.set_register(target, value))
     }
 
-    fn op_addiu(&mut self, instruction: Instruction) {
+    fn op_addiu(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let imm = instruction.imm16_se();
         let source = self.register(instruction.rs());
-        self.set_register(target, source.wrapping_add(imm));
+
+        Ok(self.set_register(target, source.wrapping_add(imm)))
     }
 
-    fn op_slti(&mut self, instruction: Instruction) {
+    fn op_slti(&mut self, instruction: Instruction) -> Result<(), String> {
         let imm = instruction.imm16_se() as i32;
         let source = self.register(instruction.rs()) as i32;
         let target = instruction.rt();
 
-        self.set_register(target, (source < imm) as u32);
+        Ok(self.set_register(target, (source < imm) as u32))
     }
 
-    fn op_sltiu(&mut self, instruction: Instruction) {
+    fn op_sltiu(&mut self, instruction: Instruction) -> Result<(), String> {
         let imm = instruction.imm16_se();
         let source = self.register(instruction.rs());
         let target = instruction.rt();
 
-        self.set_register(target, (source < imm) as u32);
+        Ok(self.set_register(target, (source < imm) as u32))
     }
 
-    fn op_andi(&mut self, instruction: Instruction) {
+    fn op_andi(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let imm = instruction.imm16();
         let source = instruction.rs();
 
-        self.set_register(target, self.register(source) & imm);
+        Ok(self.set_register(target, self.register(source) & imm))
     }
 
-    fn op_ori(&mut self, instruction: Instruction) {
+    fn op_ori(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let imm = instruction.imm16();
         let source = instruction.rs();
 
-        self.set_register(target, self.register(source) | imm);
+        Ok(self.set_register(target, self.register(source) | imm))
     }
 
-    fn op_xori(&mut self, instruction: Instruction) {
+    fn op_xori(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let imm = instruction.imm16();
         let source = instruction.rs();
 
-        self.set_register(target, self.register(source) ^ imm);
+        Ok(self.set_register(target, self.register(source) ^ imm))
     }
 
-    fn op_lui(&mut self, instruction: Instruction) {
+    fn op_lui(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let value = instruction.imm16();
 
-        self.set_register(target, value << 16);
+        Ok(self.set_register(target, value << 16))
     }
 
-    fn op_sb(&mut self, instruction: Instruction) {
+    fn op_sb(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store8(base.wrapping_add(offset), value as u8);
+        self.store8(base.wrapping_add(offset), value as u8)
     }
 
-    fn op_sh(&mut self, instruction: Instruction) {
+    fn op_sh(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store16(base.wrapping_add(offset), value as u16);
+        self.store16(base.wrapping_add(offset), value as u16)
     }
 
-    fn op_sw(&mut self, instruction: Instruction) {
+    fn op_sw(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store32(base.wrapping_add(offset), value);
+        self.store32(base.wrapping_add(offset), value)
     }
 
-    fn op_lb(&mut self, instruction: Instruction) {
+    fn op_lb(&mut self, instruction: Instruction) -> Result<(), String> {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load8(base.wrapping_add(offset)) as i8;
+        let value = self.load8(base.wrapping_add(offset))? as i8;
         self.pending_load = (target_index, value as u32);
+        Ok(())
     }
 
-    fn op_lh(&mut self, instruction: Instruction) {
+    fn op_lh(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load16(base.wrapping_add(offset)) as i16;
+        let value = self.load16(base.wrapping_add(offset))? as i16;
         self.pending_load = (target_index, value as u32);
+        Ok(())
     }
 
-    fn op_lw(&mut self, instruction: Instruction) {
+    fn op_lw(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load32(base.wrapping_add(offset));
+        let value = self.load32(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value);
+        Ok(())
     }
 
-    fn op_lbu(&mut self, instruction: Instruction) {
+    fn op_lbu(&mut self, instruction: Instruction) -> Result<(), String> {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load8(base.wrapping_add(offset));
+        let value = self.load8(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value as u32);
+        Ok(())
     }
 
-    fn op_lhu(&mut self, instruction: Instruction) {
+    fn op_lhu(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return;
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
         }
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load16(base.wrapping_add(offset));
+        let value = self.load16(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value as u32);
+        Ok(())
     }
 
-    fn exception(&mut self, cause: Exception) {
+    fn exception(&mut self, cause: Exception) -> Result<(), String> {
         let handler = match self.sr & (1 << 22) != 0 {
             true => 0xbfc00180,
             false => 0x80000080,
@@ -679,11 +701,13 @@ impl CPU {
 
         self.pc = handler;
         self.next_pc = self.pc.wrapping_add(4);
+
+        Ok(())
     }
 
     pub fn exec_next_instruction(&mut self) {
         let instruction = Instruction {
-            value: self.load32(self.pc),
+            value: self.load32(self.pc).expect("Failed to load instruction from self.pc"),
         };
         self.current_pc = self.pc;
 
@@ -700,7 +724,9 @@ impl CPU {
         self.pending_load = (RegisterIndex(0), 0);
         // </unsure>
 
-        self.decode_and_execute(instruction);
+        if let Err(msg) = self.decode_and_execute(instruction) {
+            self.panic_message(instruction, msg.as_str());
+        }
         self.input_registers = self.output_registers;
     }
 
@@ -712,20 +738,14 @@ impl CPU {
         }
     }
 
-    fn panic(&self, instruction: Instruction) {
-        // self.dump_registers();
-        panic!(
-            "Panicked at instruction: {} \nExecuted {} instructions.",
-            instruction, self.counter
-        );
-    }
-
     fn panic_message(&self, instruction: Instruction, message: &str) {
         // self.dump_registers();
-        panic!(
-            "{} \nPanicked at instruction: {} \nExecuted {} instructions.",
-            message, instruction, self.counter
-        );
+        eprintln!("----------------------------------------------------------------");
+        eprintln!("[-] Instruction: {}", instruction);
+        eprintln!("[-] NOTE: {}", message);
+        eprintln!("[-] Executed {} instructions", self.counter);
+        eprintln!("----------------------------------------------------------------");
+        panic!();
     }
 }
 
