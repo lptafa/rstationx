@@ -1,22 +1,14 @@
-use crate::range::Range;
-
-pub const RAM_SIZE: usize = 2 * 1024 * 1024;
-const RANGE: Range = Range(0x00000000, RAM_SIZE as u32);
-
+use crate::map::RAM_SIZE;
 
 pub struct RAM {
-    data: Vec<u8>
+    data: Vec<u8>,
 }
 
 impl RAM {
     pub fn new() -> RAM {
-        let data = vec![0x69; RAM_SIZE];
+        let data = vec![0x69; RAM_SIZE as usize];
 
         RAM { data }
-    }
-
-    pub fn contains(addr: u32) -> Option<u32> {
-        RANGE.contains(addr)
     }
 
     pub fn load8(&self, offset: u32) -> u8 {
@@ -68,5 +60,4 @@ impl RAM {
             value = value >> 8;
         }
     }
-
 }

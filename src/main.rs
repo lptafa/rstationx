@@ -3,14 +3,12 @@ mod bios;
 mod bus;
 mod cpu;
 mod instruction;
+mod map;
 mod ram;
-mod range;
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate env_logger;
-
-use log::Level;
-
 
 fn main() {
     env_logger::Builder::from_default_env()

@@ -1,8 +1,8 @@
 // wagwan my g
-use crate::bios::BIOS_START;
 use crate::bus::Bus;
-use crate::instruction::{ Instruction, RegisterIndex };
-use log::{ debug, info };
+use crate::instruction::{Instruction, RegisterIndex};
+use crate::map::BIOS_START;
+use log::debug;
 
 pub struct CPU {
     pc: u32,
@@ -90,12 +90,15 @@ impl CPU {
         pc = pc.wrapping_add(offset << 2);
         pc = pc.wrapping_sub(4);
         self.next_pc = pc;
-
     }
 
     fn decode_and_execute(&mut self, instruction: Instruction) {
         self.counter += 1;
-        trace!("Executing instruction: 0x{:02X}", instruction.opcode());
+        trace!(
+            "({}): Executing instruction: 0x{:02X}",
+            self.counter,
+            instruction.opcode()
+        );
 
         match instruction.opcode() {
             0x00 => {
@@ -256,7 +259,10 @@ impl CPU {
     }
 
     fn op_cop0(&mut self, instruction: Instruction) {
-        debug!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
+        debug!(
+            "Executing cop0 instruction 0x{:08X}",
+            instruction.cop_opcode()
+        );
         match instruction.cop_opcode() {
             0x00 => self.op_mfc0(instruction),
             0x04 => self.op_mtc0(instruction),
@@ -290,11 +296,11 @@ impl CPU {
                 if value != 0 {
                     self.panic_message(instruction, "Unhandled write to cop0 register.")
                 }
-            },
+            }
             RegisterIndex(12) => self.sr = value,
             RegisterIndex(13) => self.cause = value,
             RegisterIndex(14) => self.epc = value,
-            _ => self.panic_message(instruction, "Unhandled cop0 register.")
+            _ => self.panic_message(instruction, "Unhandled cop0 register."),
         }
     }
 
@@ -374,11 +380,11 @@ impl CPU {
         self.lo = source;
     }
 
-    fn op_mult(&mut self, instruction: Instruction) {
+    fn op_mult(&mut self, _instruction: Instruction) {
         panic!("mult")
     }
 
-    fn op_multu(&mut self, instruction: Instruction) {
+    fn op_multu(&mut self, _instruction: Instruction) {
         panic!("multu")
     }
 
@@ -394,7 +400,6 @@ impl CPU {
             } else {
                 self.lo = 1;
             }
-
         } else if dimmadome as u32 == 0x80000000 && divisor == -1 {
             self.hi = 0;
             self.lo = 0x80000000;
@@ -424,7 +429,7 @@ impl CPU {
 
         let value = match left.checked_add(right) {
             Some(value) => value as u32,
-            None => panic!("ADD overflow")
+            None => panic!("ADD overflow"),
         };
 
         self.set_register(target, value);
@@ -445,7 +450,7 @@ impl CPU {
 
         let value = match left.checked_sub(right) {
             Some(value) => value as u32,
-            None => panic!("ADD overflow")
+            None => panic!("ADD overflow"),
         };
 
         self.set_register(target, value);
@@ -498,7 +503,7 @@ impl CPU {
 
         let value = match source.checked_add(imm) {
             Some(value) => value as u32,
-            None => panic!("ADDI overflow")
+            None => panic!("ADDI overflow"),
         };
 
         self.set_register(target, value);
@@ -641,7 +646,6 @@ impl CPU {
 
         let value = self.load8(base.wrapping_add(offset));
         self.pending_load = (target_index, value as u32);
-
     }
 
     fn op_lhu(&mut self, instruction: Instruction) {
@@ -656,7 +660,6 @@ impl CPU {
 
         let value = self.load16(base.wrapping_add(offset));
         self.pending_load = (target_index, value as u32);
-
     }
 
     fn exception(&mut self, cause: Exception) {
@@ -679,7 +682,9 @@ impl CPU {
     }
 
     pub fn exec_next_instruction(&mut self) {
-        let instruction = Instruction { value: self.load32(self.pc)};
+        let instruction = Instruction {
+            value: self.load32(self.pc),
+        };
         self.current_pc = self.pc;
 
         self.pc = self.next_pc;

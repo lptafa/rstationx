@@ -1,13 +1,9 @@
-use crate::range::Range;
+use crate::map::BIOS_SIZE;
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
 
-use log::{ info };
-
-pub const BIOS_SIZE: u32 = 512 * 1024;
-pub const BIOS_START: u32 = 0x1fc00000;
-const RANGE: Range = Range(BIOS_START, BIOS_SIZE);
+use log::info;
 
 pub struct BIOS {
     #[allow(dead_code)]
@@ -30,10 +26,6 @@ impl BIOS {
                 "Invalid BIOS file.",
             ))
         }
-    }
-
-    pub fn contains(addr: u32) -> Option<u32> {
-        RANGE.contains(addr)
     }
 
     pub fn load8(&self, offset: u32) -> u8 {
