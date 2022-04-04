@@ -61,7 +61,7 @@ impl Bus {
                         debug!("Unhandled write to MEMCONTROL register.");
                         Ok(())
                     }
-                }
+                };
             }
             MemoryRegion::IRQControl
             | MemoryRegion::Expansion1
@@ -78,12 +78,12 @@ impl Bus {
     }
 }
 
-fn expect_align(addr: u32, align: u32) -> Result<(), String>{
+fn expect_align(addr: u32, align: u32) -> Result<(), String> {
     if addr % align != 0 {
-        Err(
-            format!("Unaligned memory access for address 0x{:08X}... expected alignment of {}",
-            addr, align)
-        )
+        Err(format!(
+            "Unaligned memory access for address 0x{:08X}... expected alignment of {}",
+            addr, align
+        ))
     } else {
         Ok(())
     }

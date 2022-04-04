@@ -723,7 +723,7 @@ impl CPU {
 
         if self.current_pc % 4 != 0 {
             self.exception(Exception::AddressErrorLoad).unwrap();
-            return
+            return;
         }
 
         let instruction = Instruction {
@@ -762,7 +762,7 @@ impl CPU {
     fn panic_message(&self, instruction: Instruction, message: &str) {
         // self.dump_registers();
         eprintln!("----------------------------------------------------------------");
-        eprintln!("[-] Instruction: {}", instruction);
+        eprintln!("[-] Instruction: {}", instruction.value);
         eprintln!("[-] NOTE: {}", message);
         eprintln!("[-] Executed {} instructions", self.counter);
         eprintln!("----------------------------------------------------------------");
