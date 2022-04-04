@@ -53,28 +53,12 @@ impl CPU {
         }
     }
 
-    fn load8(&self, addr: u32) -> Result<u8, String> {
-        self.bus.load8(addr)
+    fn load<T: TryFrom<u32>>(&self, addr: u32) -> Result<T, String> {
+        self.bus.load(addr)
     }
 
-    fn load16(&self, addr: u32) -> Result<u16, String> {
-        self.bus.load16(addr)
-    }
-
-    fn load32(&self, addr: u32) -> Result<u32, String> {
-        self.bus.load32(addr)
-    }
-
-    fn store8(&mut self, addr: u32, value: u8) -> Result<(), String> {
-        self.bus.store8(addr, value)
-    }
-
-    fn store16(&mut self, addr: u32, value: u16) -> Result<(), String> {
-        self.bus.store16(addr, value)
-    }
-
-    fn store32(&mut self, addr: u32, value: u32) -> Result<(), String> {
-        self.bus.store32(addr, value)
+    fn store<T: Into<u32>>(&mut self, addr: u32, value: T) -> Result<(), String> {
+        self.bus.store(addr, value)
     }
 
     fn register(&self, index: RegisterIndex) -> u32 {
@@ -171,7 +155,7 @@ impl CPU {
             0x2B => self.op_sw(instruction),
 
             op => Err(format!("Unhandled opcode 0x{:02x}", op)),
-        }
+        };
     }
 
     fn op_bcondz(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -267,13 +251,16 @@ impl CPU {
     }
 
     fn op_cop0(&mut self, instruction: Instruction) -> Result<(), String> {
-        debug!("Executing cop0 instruction 0x{:08X}", instruction.cop_opcode());
+        debug!(
+            "Executing cop0 instruction 0x{:08X}",
+            instruction.cop_opcode()
+        );
         return match instruction.cop_opcode() {
             0x00 => self.op_mfc0(instruction),
             0x04 => self.op_mtc0(instruction),
             0x10 => self.op_rfe(instruction),
             _ => Err(String::from("Unhandled cop0 opcode")),
-        }
+        };
     }
 
     fn op_mfc0(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -300,7 +287,7 @@ impl CPU {
         match cop_r {
             RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
                 if value != 0 {
-                    return Err(String::from("Unhandled write to cop0 register."))
+                    return Err(String::from("Unhandled write to cop0 register."));
                 }
             }
             RegisterIndex(12) => self.sr = value,
@@ -369,7 +356,9 @@ impl CPU {
 
     fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
         self.exception(Exception::Break)?;
-        Err(String::from("We don't know the exception number for break."))
+        Err(String::from(
+            "We don't know the exception number for break.",
+        ))
     }
 
     fn op_mfhi(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -590,7 +579,7 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store8(base.wrapping_add(offset), value as u8)
+        self.store::<u8>(base.wrapping_add(offset), value as u8)
     }
 
     fn op_sh(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -603,7 +592,7 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store16(base.wrapping_add(offset), value as u16)
+        self.store::<u16>(base.wrapping_add(offset), value as u16)
     }
 
     fn op_sw(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -616,7 +605,7 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store32(base.wrapping_add(offset), value)
+        self.store::<u32>(base.wrapping_add(offset), value)
     }
 
     fn op_lb(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -624,7 +613,7 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load8(base.wrapping_add(offset))? as i8;
+        let value = self.load::<u8>(base.wrapping_add(offset))? as i8;
         self.pending_load = (target_index, value as u32);
         Ok(())
     }
@@ -639,7 +628,7 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load16(base.wrapping_add(offset))? as i16;
+        let value = self.load::<u16>(base.wrapping_add(offset))? as i16;
         self.pending_load = (target_index, value as u32);
         Ok(())
     }
@@ -654,7 +643,7 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load32(base.wrapping_add(offset))?;
+        let value = self.load::<u32>(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value);
         Ok(())
     }
@@ -664,7 +653,7 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load8(base.wrapping_add(offset))?;
+        let value = self.load::<u8>(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value as u32);
         Ok(())
     }
@@ -679,7 +668,7 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load16(base.wrapping_add(offset))?;
+        let value = self.load::<u16>(base.wrapping_add(offset))?;
         self.pending_load = (target_index, value as u32);
         Ok(())
     }
@@ -707,7 +696,9 @@ impl CPU {
 
     pub fn exec_next_instruction(&mut self) {
         let instruction = Instruction {
-            value: self.load32(self.pc).expect("Failed to load instruction from self.pc"),
+            value: self
+                .load::<u32>(self.pc)
+                .expect("Failed to load instruction from self.pc"),
         };
         self.current_pc = self.pc;
 

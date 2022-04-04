@@ -68,12 +68,12 @@ const ALL_REGIONS: [(MemoryRegion, Range); 11] = [
     (MemoryRegion::IO, Range(0x1f801000, 8 * 1024)),
 ];
 
-pub fn find_region(addr: u32) -> Option<(MemoryRegion, u32)> {
+pub fn find_region(addr: u32) -> Result<(MemoryRegion, u32), String> {
     let addr = mask_region(addr);
     for (region, range) in ALL_REGIONS.iter() {
         if let Some(offset) = range.contains(addr) {
-            return Some((*region, offset));
+            return Ok((*region, offset));
         }
     }
-    return None;
+    return Err(format!("Unknown memory region in store"));
 }
