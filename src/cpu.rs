@@ -93,6 +93,7 @@ impl CPU {
                     0x02 => self.op_srl(instruction),
                     0x03 => self.op_sra(instruction),
                     0x04 => self.op_sllv(instruction),
+                    // 0x07 => self.op_srav(instruction),
                     0x08 => self.op_jr(instruction),
                     0x09 => self.op_jalr(instruction),
 
@@ -329,19 +330,27 @@ impl CPU {
 
     fn op_sra(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        let shift = instruction.rs();
-        let value = self.register(instruction.rt()) >> self.register(shift) & 0x1f;
+        let shift = instruction.imm5();
+        let value = (self.register(instruction.rt()) as i32) >> shift;
 
         Ok(self.set_register(destination, value as u32))
     }
 
     fn op_sllv(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        let shift = instruction.imm5();
-        let value = (self.register(instruction.rt()) as i32) << shift;
+        let shift = self.register(instruction.rs());
+        let value = self.register(instruction.rt()) << shift & 0x1f;
 
-        Ok(self.set_register(destination, value as u32))
+        Ok(self.set_register(destination, value))
     }
+
+    // fn op_srav(&mut self, instruction: Instruction) -> Result<(), String> {
+    //     let destination = instruction.rd();
+    //     let shift = self.register(instruction.rs());
+    //     let value = (self.register(instruction.rt()) as i32) >> shift & 0x1f;
+
+    //     Ok(self.set_register(destination, value as u32))
+    // }
 
     fn op_jr(&mut self, instruction: Instruction) -> Result<(), String> {
         let value = instruction.rs();
@@ -723,7 +732,7 @@ impl CPU {
 
         if self.current_pc % 4 != 0 {
             self.exception(Exception::AddressErrorLoad).unwrap();
-            return
+            return;
         }
 
         let instruction = Instruction {
@@ -760,7 +769,7 @@ impl CPU {
     }
 
     fn panic_message(&self, instruction: Instruction, message: &str) {
-        // self.dump_registers();
+        self.dump_registers();
         eprintln!("----------------------------------------------------------------");
         eprintln!("[-] Instruction: {}", instruction);
         eprintln!("[-] NOTE: {}", message);
