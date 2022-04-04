@@ -92,7 +92,7 @@ impl CPU {
                     0x00 => self.op_sll(instruction),
                     0x02 => self.op_srl(instruction),
                     0x03 => self.op_sra(instruction),
-
+                    0x04 => self.op_sllv(instruction),
                     0x08 => self.op_jr(instruction),
                     0x09 => self.op_jalr(instruction),
 
@@ -329,8 +329,16 @@ impl CPU {
 
     fn op_sra(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
+        let shift = instruction.rs();
+        let value = self.register(instruction.rt()) >> self.register(shift) & 0x1f;
+
+        Ok(self.set_register(destination, value as u32))
+    }
+
+    fn op_sllv(&mut self, instruction: Instruction) -> Result<(), String> {
+        let destination = instruction.rd();
         let shift = instruction.imm5();
-        let value = (self.register(instruction.rt()) as i32) >> shift;
+        let value = (self.register(instruction.rt()) as i32) << shift;
 
         Ok(self.set_register(destination, value as u32))
     }
@@ -592,7 +600,11 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store::<u16>(base.wrapping_add(offset), value as u16)
+        if offset % 2 == 0 {
+            self.store::<u16>(base.wrapping_add(offset), value as u16)
+        } else {
+            self.exception(Exception::AddressErrorStore)
+        }
     }
 
     fn op_sw(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -605,7 +617,11 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
-        self.store::<u32>(base.wrapping_add(offset), value)
+        if offset % 4 == 0 {
+            self.store::<u32>(base.wrapping_add(offset), value)
+        } else {
+            self.exception(Exception::AddressErrorStore)
+        }
     }
 
     fn op_lb(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -628,9 +644,13 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load::<u16>(base.wrapping_add(offset))? as i16;
-        self.pending_load = (target_index, value as u32);
-        Ok(())
+        if offset % 2 == 0 {
+            let value = self.load::<u16>(base.wrapping_add(offset))? as i16;
+            self.pending_load = (target_index, value as u32);
+            Ok(())
+        } else {
+            self.exception(Exception::AddressErrorLoad)
+        }
     }
 
     fn op_lw(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -643,9 +663,13 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load::<u32>(base.wrapping_add(offset))?;
-        self.pending_load = (target_index, value);
-        Ok(())
+        if offset % 4 == 0 {
+            let value = self.load::<u32>(base.wrapping_add(offset))?;
+            self.pending_load = (target_index, value);
+            Ok(())
+        } else {
+            self.exception(Exception::AddressErrorLoad)
+        }
     }
 
     fn op_lbu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -695,12 +719,18 @@ impl CPU {
     }
 
     pub fn exec_next_instruction(&mut self) {
+        self.current_pc = self.pc;
+
+        if self.current_pc % 4 != 0 {
+            self.exception(Exception::AddressErrorLoad).unwrap();
+            return
+        }
+
         let instruction = Instruction {
             value: self
                 .load::<u32>(self.pc)
                 .expect("Failed to load instruction from self.pc"),
         };
-        self.current_pc = self.pc;
 
         self.pc = self.next_pc;
         self.next_pc = self.next_pc.wrapping_add(4);
@@ -740,7 +770,16 @@ impl CPU {
     }
 }
 
+#[allow(dead_code)]
 enum Exception {
+    Interrupt = 0x0,
+    AddressErrorLoad = 0x4,
+    AddressErrorStore = 0x5,
+    BusErrorFetch = 0x6,
+    BusErrorLoad = 0x7,
     Syscall = 0x8,
-    Break = 0x0,
+    Break = 0x9,
+    Reserved = 0xA,
+    CopUnusable = 0xB,
+    AOverflow = 0xC,
 }

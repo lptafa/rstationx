@@ -29,15 +29,15 @@ impl Bus {
             | MemoryRegion::Timers
             | MemoryRegion::IO
             | MemoryRegion::SPU => {
-                trace!("Unhandled load::<u32> at {:?} range.", region);
+                trace!("Unhandled load at {:?} range.", region);
                 Ok(utils::to_t(0))
             }
             MemoryRegion::Expansion1 => {
-                trace!("Unexpected load::<u32> at {:?} range.", region);
+                trace!("Unexpected load at {:?} range.", region);
                 Ok(utils::to_t(0xff))
             }
             _ => Err(format!(
-                "Unhandled load::<u32> @ 0x{:08X} (MemoryRegion::{:?})",
+                "Unhandled load @ 0x{:08X} (MemoryRegion::{:?})",
                 addr, region
             )),
         };
