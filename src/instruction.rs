@@ -57,6 +57,8 @@ impl Instruction {
                 0x03 => "sra",
                 0x04 => "sllv",
                 0x08 => "jr",
+                0x06 => "srlv",
+                0x07 => "srav",
                 0x09 => "jalr",
                 0x0C => "syscall",
                 0x0D => "break",
@@ -95,7 +97,17 @@ impl Instruction {
             0x0D => "ori",
             0x0E => "xori",
             0x0F => "lui",
-            0x10 => "cop0",
+
+            0x10 => match self.cop_opcode() {
+                0x00 => "mfc0",
+                0x04 => "mtc0",
+                0x10 => "rfe",
+                _ => "Invalid cop0 opcode",
+            },
+            0x11 => "cop1",
+            0x12 => "gte",
+            0x13 => "cop3",
+
             0x20 => "lb",
             0x21 => "lh",
             0x23 => "lw",
@@ -108,6 +120,7 @@ impl Instruction {
         }
     }
 }
+
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x{:08X} - {}", self.value, self.instruction())

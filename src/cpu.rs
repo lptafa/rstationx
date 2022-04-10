@@ -106,7 +106,8 @@ impl CPU {
                     0x02 => self.op_srl(instruction),
                     0x03 => self.op_sra(instruction),
                     0x04 => self.op_sllv(instruction),
-                    // 0x07 => self.op_srav(instruction),
+                    0x06 => self.op_srlv(instruction),
+                    0x07 => self.op_srav(instruction),
                     0x08 => self.op_jr(instruction),
                     0x09 => self.op_jalr(instruction),
 
@@ -153,16 +154,29 @@ impl CPU {
             0x0D => self.op_ori(instruction),
             0x0E => self.op_xori(instruction),
             0x0F => self.op_lui(instruction),
-            0x10 => self.op_cop0(instruction),
-            0x11 => Err(String::from("Call to missing coprocessor cop1")),
-            0x12 => Err(String::from("Unimplemented call to GTE")),
-            0x13 => Err(String::from("Call to missing coprocessor cop3")),
+
+            // COP-0
+            0x10 => match instruction.cop_opcode() {
+                0x00 => self.op_mfc0(instruction),
+                0x04 => self.op_mtc0(instruction),
+                0x10 => self.op_rfe(instruction),
+                _ => Err(format!(
+                    "Unhandled cop0 instruction: 0x{:08X}",
+                    instruction.cop_opcode()
+                )),
+            },
+
+            0x11 => self.exception(Exception::CoprocessorError),
+            0x12 => self.op_cop2(instruction),
+            0x13 => self.exception(Exception::CoprocessorError),
 
             0x20 => self.op_lb(instruction),
             0x21 => self.op_lh(instruction),
+            0x22 => self.op_lwl(instruction),
             0x23 => self.op_lw(instruction),
             0x24 => self.op_lbu(instruction),
             0x25 => self.op_lhu(instruction),
+            0x26 => self.op_lwr(instruction),
 
             0x28 => self.op_sb(instruction),
             0x29 => self.op_sh(instruction),
@@ -279,17 +293,8 @@ impl CPU {
         Ok(self.set_register(target, result as u32))
     }
 
-    fn op_cop0(&mut self, instruction: Instruction) -> Result<(), String> {
-        debug!(
-            "Executing cop0 instruction 0x{:08X}",
-            instruction.cop_opcode()
-        );
-        return match instruction.cop_opcode() {
-            0x00 => self.op_mfc0(instruction),
-            0x04 => self.op_mtc0(instruction),
-            0x10 => self.op_rfe(instruction),
-            _ => Err(String::from("Unhandled cop0 opcode")),
-        };
+    fn op_cop2(&mut self, instruction: Instruction) -> Result<(), String> {
+        Err(format!("Unimplemented cop2 opcode: {}", instruction))
     }
 
     fn op_mfc0(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -384,13 +389,25 @@ impl CPU {
         Ok(self.set_register(destination, value))
     }
 
-    // fn op_srav(&mut self, instruction: Instruction) -> Result<(), String> {
-    //     let destination = instruction.rd();
-    //     let shift = self.register(instruction.rs());
-    //     let value = (self.register(instruction.rt()) as i32) >> shift & 0x1f;
+    fn op_srlv(&mut self, instruction: Instruction) -> Result<(), String> {
+        let destination = instruction.rd();
+        let shift = self.register(instruction.rs());
+        let value = (self.register(instruction.rt()) as u32) >> shift & 0x1f;
 
-    //     Ok(self.set_register(destination, value as u32))
-    // }
+        self.delayed_load();
+
+        Ok(self.set_register(destination, value as u32))
+    }
+
+    fn op_srav(&mut self, instruction: Instruction) -> Result<(), String> {
+        let destination = instruction.rd();
+        let shift = self.register(instruction.rs());
+        let value = (self.register(instruction.rt()) as i32) >> shift & 0x1f;
+
+        self.delayed_load();
+
+        Ok(self.set_register(destination, value as u32))
+    }
 
     fn op_jr(&mut self, instruction: Instruction) -> Result<(), String> {
         let value = instruction.rs();
@@ -421,10 +438,7 @@ impl CPU {
 
     fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
         self.delayed_load();
-        self.exception(Exception::Break)?;
-        Err(String::from(
-            "We don't know the exception number for break.",
-        ))
+        self.exception(Exception::Break)
     }
 
     fn op_mfhi(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -459,12 +473,26 @@ impl CPU {
         Ok(())
     }
 
-    fn op_mult(&mut self, _instruction: Instruction) -> Result<(), String> {
-        Err(String::from("Unimplemented mult"))
+    fn op_mult(&mut self, instruction: Instruction) -> Result<(), String> {
+        let a = self.register(instruction.rs()) as i64;
+        let b = self.register(instruction.rt()) as i64;
+
+        self.delayed_load();
+
+        self.hi = ((a * b) >> 32) as u32;
+        self.lo = (a * b) as u32;
+        Ok(())
     }
 
-    fn op_multu(&mut self, _instruction: Instruction) -> Result<(), String> {
-        Err(String::from("Unimplemented multu"))
+    fn op_multu(&mut self, instruction: Instruction) -> Result<(), String> {
+        let a = self.register(instruction.rs()) as u64;
+        let b = self.register(instruction.rt()) as u64;
+
+        self.delayed_load();
+
+        self.hi = ((a * b) >> 32) as u32;
+        self.lo = (a * b) as u32;
+        Ok(())
     }
 
     fn op_div(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -514,12 +542,10 @@ impl CPU {
 
         self.delayed_load();
 
-        let value = match left.checked_add(right) {
-            Some(value) => value as u32,
-            None => return Err(String::from("ADD overflow")),
+        return match left.checked_add(right) {
+            Some(value) => Ok(self.set_register(target, value as u32)),
+            None => self.exception(Exception::Overflow),
         };
-
-        Ok(self.set_register(target, value))
     }
 
     fn op_addu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -539,12 +565,10 @@ impl CPU {
 
         self.delayed_load();
 
-        let value = match left.checked_sub(right) {
-            Some(value) => value as u32,
-            None => return Err(String::from("ADD overflow")),
+        return match left.checked_sub(right) {
+            Some(value) => Ok(self.set_register(target, value as u32)),
+            None => self.exception(Exception::Overflow),
         };
-
-        Ok(self.set_register(target, value))
     }
 
     fn op_subu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -604,12 +628,10 @@ impl CPU {
 
         self.delayed_load();
 
-        let value = match source.checked_add(imm) {
-            Some(value) => value as u32,
-            None => return Err(String::from("ADDI overflow")),
+        return match source.checked_add(imm) {
+            Some(value) => Ok(self.set_register(target, value as u32)),
+            None => self.exception(Exception::Overflow),
         };
-
-        Ok(self.set_register(target, value))
     }
 
     fn op_addiu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -782,6 +804,72 @@ impl CPU {
         }
     }
 
+    fn op_lwl(&mut self, instruction: Instruction) -> Result<(), String> {
+        if self.sr & 0x10000 != 0 {
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
+        }
+
+        let base = instruction.imm16_se();
+        let offset = self.register(instruction.rs());
+        let addr = base.wrapping_add(offset);
+
+        let target_index = instruction.rt();
+
+        let (preg, pval) = self.pending_load;
+        let cur_v = if preg.0 == target_index.0 {
+            pval
+        } else {
+            self.register(target_index)
+        };
+
+        let aligned_addr = addr & !0x3;
+        let aligned_word = self.load::<u32>(aligned_addr)?;
+
+        let value = match addr & 0b11 {
+            0 => (cur_v & 0x00FF_FFFF) | (aligned_word << 24),
+            1 => (cur_v & 0x0000_FFFF) | (aligned_word << 16),
+            2 => (cur_v & 0x0000_00FF) | (aligned_word << 8),
+            3 => (cur_v & 0x0000_0000) | (aligned_word << 0),
+            _ => unreachable!(),
+        };
+        self.delayed_load_chain(target_index, value);
+        Ok(())
+    }
+
+    fn op_lwr(&mut self, instruction: Instruction) -> Result<(), String> {
+        if self.sr & 0x10000 != 0 {
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
+        }
+
+        let base = instruction.imm16_se();
+        let offset = self.register(instruction.rs());
+        let addr = base.wrapping_add(offset);
+
+        let target_index = instruction.rt();
+
+        let (preg, pval) = self.pending_load;
+        let cur_v = if preg.0 == target_index.0 {
+            pval
+        } else {
+            self.register(target_index)
+        };
+
+        let aligned_addr = addr & !0x3;
+        let aligned_word = self.load::<u32>(aligned_addr)?;
+
+        let value = match addr & 0b11 {
+            0 => (cur_v & 0x0000_0000) | (aligned_word >> 0),
+            1 => (cur_v & 0xFF00_0000) | (aligned_word >> 8),
+            2 => (cur_v & 0xFFFF_0000) | (aligned_word >> 16),
+            3 => (cur_v & 0xFFFF_FF00) | (aligned_word >> 24),
+            _ => unreachable!(),
+        };
+        self.delayed_load_chain(target_index, value);
+        Ok(())
+    }
+
     fn op_lbu(&mut self, instruction: Instruction) -> Result<(), String> {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -809,7 +897,7 @@ impl CPU {
 
     fn exception(&mut self, cause: Exception) -> Result<(), String> {
         let handler = match self.sr & (1 << 22) != 0 {
-            true =>  0x80000180,
+            true => 0x80000180,
             false => 0x80000080,
         };
 
@@ -872,7 +960,7 @@ impl CPU {
     fn panic_message(&self, instruction: Instruction, message: &str) {
         self.dump_registers();
         eprintln!("----------------------------------------------------------------");
-        eprintln!("[-] Instruction: {}", instruction.value);
+        eprintln!("[-] Instruction: {}", instruction);
         eprintln!("[-] NOTE: {}", message);
         eprintln!("[-] Executed {} instructions", self.counter);
         eprintln!("----------------------------------------------------------------");
@@ -890,6 +978,6 @@ enum Exception {
     Syscall = 0x8,
     Break = 0x9,
     Reserved = 0xA,
-    CopUnusable = 0xB,
-    AOverflow = 0xC,
+    CoprocessorError = 0xB,
+    Overflow = 0xC,
 }

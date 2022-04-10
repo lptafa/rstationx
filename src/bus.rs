@@ -2,6 +2,7 @@
 use log::debug;
 
 use crate::bios::BIOS;
+use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
 use crate::ram::RAM;
@@ -10,12 +11,13 @@ use std::string::String;
 
 pub struct Bus {
     bios: BIOS,
+    gpu: GPU,
     ram: RAM,
 }
 
 impl Bus {
-    pub fn new(bios: BIOS, ram: RAM) -> Bus {
-        Bus { bios, ram }
+    pub fn new(bios: BIOS, ram: RAM, gpu: GPU) -> Bus {
+        Bus { bios, ram, gpu }
     }
 
     pub fn load<T: TryFrom<u32>>(&self, addr: u32) -> Result<T, String> {
@@ -27,7 +29,7 @@ impl Bus {
             MemoryRegion::RAM => Ok(utils::load::<T>(&self.ram.data, offset)),
             MemoryRegion::IRQControl
             | MemoryRegion::Timers
-            | MemoryRegion::IO
+            | MemoryRegion::DMA
             | MemoryRegion::SPU => {
                 trace!("Unhandled load at {:?} range.", region);
                 Ok(utils::to_t(0))
@@ -36,6 +38,8 @@ impl Bus {
                 trace!("Unexpected load at {:?} range.", region);
                 Ok(utils::to_t(0xff))
             }
+            MemoryRegion::GPU => Ok(self.gpu.load(offset)),
+
             _ => Err(format!(
                 "Unhandled load @ 0x{:08X} (MemoryRegion::{:?})",
                 addr, region
@@ -69,10 +73,12 @@ impl Bus {
             | MemoryRegion::RAMSize
             | MemoryRegion::CacheControl
             | MemoryRegion::SPU
-            | MemoryRegion::Timers
-            | MemoryRegion::IO => {
+            | MemoryRegion::DMA
+            | MemoryRegion::GPU
+            | MemoryRegion::Timers => {
                 debug!("Ignoring write to {:?} range: 0x{:08X}", region, offset);
             }
+            _ => return Err(format!("Unhandled write to 0x{:08x} addr", addr)),
         }
         Ok(())
     }

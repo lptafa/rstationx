@@ -45,7 +45,8 @@ pub enum MemoryRegion {
     Expansion1,
     Expansion2,
     SPU,
-    IO,
+    DMA,
+    GPU,
     IRQControl,
     Timers,
     CacheControl,
@@ -53,7 +54,7 @@ pub enum MemoryRegion {
 
 // Note: Increment the array size if you add a new region.
 // Note: Put the most frequently accessed regions first, for performance.
-const ALL_REGIONS: [(MemoryRegion, Range); 11] = [
+const ALL_REGIONS: [(MemoryRegion, Range); 12] = [
     (MemoryRegion::RAM, Range(RAM_START, RAM_SIZE)),
     (MemoryRegion::BIOS, Range(BIOS_START, BIOS_SIZE)),
     (MemoryRegion::Expansion1, Range(0x1f000000, 8 * 1024 * 1024)),
@@ -64,8 +65,8 @@ const ALL_REGIONS: [(MemoryRegion, Range); 11] = [
     (MemoryRegion::Expansion2, Range(0x1f802000, 66)),
     (MemoryRegion::IRQControl, Range(0x1f801070, 8)),
     (MemoryRegion::Timers, Range(0x1f801100, 0x30)),
-    // FIXME: This is not right
-    (MemoryRegion::IO, Range(0x1f801000, 8 * 1024)),
+    (MemoryRegion::DMA, Range(0x1f801080, 0x80)),
+    (MemoryRegion::GPU, Range(0x1f801810, 8)),
 ];
 
 pub fn find_region(addr: u32) -> Result<(MemoryRegion, u32), String> {
@@ -75,5 +76,5 @@ pub fn find_region(addr: u32) -> Result<(MemoryRegion, u32), String> {
             return Ok((*region, offset));
         }
     }
-    return Err(format!("Unknown memory region in store"));
+    return Err(format!("Unknown memory region in store: 0x{:08X}", addr));
 }
