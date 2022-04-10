@@ -1,2 +1,5 @@
 target/
 bios/
+.DS_Store
+*.dSYM
+*.out
