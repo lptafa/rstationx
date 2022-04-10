@@ -22,8 +22,7 @@ pub struct CPU {
     branch: bool,
     delay: bool,
 
-    input_registers: [u32; 32],
-    output_registers: [u32; 32],
+    registers: [u32; 32],
 }
 
 impl CPU {
@@ -48,8 +47,7 @@ impl CPU {
             branch: false,
             delay: false,
 
-            input_registers: registers,
-            output_registers: registers,
+            registers,
         }
     }
 
@@ -62,12 +60,26 @@ impl CPU {
     }
 
     fn register(&self, index: RegisterIndex) -> u32 {
-        self.input_registers[index.0 as usize]
+        self.registers[index.0 as usize]
     }
 
     fn set_register(&mut self, index: RegisterIndex, value: u32) {
-        self.output_registers[index.0 as usize] = value;
-        self.output_registers[0] = 0;
+        self.registers[index.0 as usize] = value;
+        self.registers[0] = 0;
+    }
+
+    fn delayed_load(&mut self) {
+        let (index, value) = self.pending_load;
+        self.set_register(index, value);
+        self.pending_load = (RegisterIndex(0), 0);
+    }
+
+    fn delayed_load_chain(&mut self, reg: RegisterIndex, val: u32) {
+        let (oreg, oval) = self.pending_load;
+        if reg.0 != oreg.0 {
+            self.set_register(oreg, oval);
+        }
+        self.pending_load = (reg, val);
     }
 
     fn branch(&mut self, offset: u32) {
@@ -75,6 +87,7 @@ impl CPU {
         pc = pc.wrapping_add(offset << 2);
         pc = pc.wrapping_sub(4);
         self.next_pc = pc;
+        self.branch = true;
     }
 
     fn decode_and_execute(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -166,15 +179,17 @@ impl CPU {
         let ins_value = instruction.value;
 
         let is_bgez = (ins_value >> 16) & 1;
-        let is_link = (ins_value >> 20) & 1 != 0;
+        let is_link = ((ins_value >> 20) & 1) != 0;
 
-        let test = ((source < 0) as u32) ^ is_bgez;
+        let test = (source < 0) as u32;
+        let test = test ^ is_bgez;
 
+        self.delayed_load();
+
+        if is_link {
+            self.set_register(RegisterIndex(31), self.next_pc);
+        }
         if test != 0 {
-            if is_link {
-                self.set_register(RegisterIndex(31), self.next_pc);
-            }
-
             self.branch(imm);
         }
         Ok(())
@@ -183,12 +198,16 @@ impl CPU {
     fn op_j(&mut self, instruction: Instruction) -> Result<(), String> {
         let imm = instruction.imm_jump() << 2;
         self.next_pc = (self.next_pc & 0xf0000000) | imm;
+        self.branch = true;
+        self.delayed_load();
         Ok(())
     }
 
     fn op_jal(&mut self, instruction: Instruction) -> Result<(), String> {
-        self.set_register(RegisterIndex(31), self.next_pc);
+        let ra = self.next_pc;
         self.op_j(instruction)?;
+        self.set_register(RegisterIndex(31), ra);
+        self.branch = true;
         Ok(())
     }
 
@@ -200,6 +219,8 @@ impl CPU {
         if left == right {
             self.branch(branch_offset);
         }
+
+        self.delayed_load();
         Ok(())
     }
 
@@ -211,26 +232,29 @@ impl CPU {
         if left != right {
             self.branch(branch_offset);
         }
+        self.delayed_load();
         Ok(())
     }
 
     fn op_blez(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
-        let left = self.register(instruction.rs());
+        let left = self.register(instruction.rs()) as i32;
 
         if left <= 0x0 {
             self.branch(branch_offset);
         }
+        self.delayed_load();
         Ok(())
     }
 
     fn op_bgtz(&mut self, instruction: Instruction) -> Result<(), String> {
         let branch_offset = instruction.imm16_se();
-        let left = self.register(instruction.rs());
+        let left = self.register(instruction.rs()) as i32;
 
         if left > 0x0 {
             self.branch(branch_offset);
         }
+        self.delayed_load();
         Ok(())
     }
 
@@ -239,6 +263,8 @@ impl CPU {
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
 
+        self.delayed_load();
+
         Ok(self.set_register(target, (left < right) as u32))
     }
 
@@ -246,6 +272,8 @@ impl CPU {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
+
+        self.delayed_load();
 
         let result = left < right;
         Ok(self.set_register(target, result as u32))
@@ -275,7 +303,7 @@ impl CPU {
             _ => return Err(String::from("Unhandled read from cop0 register.")),
         };
 
-        self.pending_load = (cpu_r, value);
+        self.delayed_load_chain(cpu_r, value);
         Ok(())
     }
 
@@ -284,6 +312,8 @@ impl CPU {
         let cop_r = instruction.rd();
 
         let value = self.register(cpu_r);
+
+        self.delayed_load();
 
         match cop_r {
             RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
@@ -304,9 +334,11 @@ impl CPU {
             return Err(String::from("Invalid cop0 instruction."));
         }
 
+        self.delayed_load();
+
         // <magic version=2>
         let mode = self.sr & 0x3f;
-        self.sr &= !0x3f;
+        self.sr &= !0xf;
         self.sr |= mode >> 2;
         // </magic>
         Ok(())
@@ -317,6 +349,8 @@ impl CPU {
         let value = self.register(instruction.rt());
         let shift = instruction.imm5();
 
+        self.delayed_load();
+
         Ok(self.set_register(destination, value << shift))
     }
 
@@ -324,6 +358,8 @@ impl CPU {
         let destination = instruction.rd();
         let value = self.register(instruction.rt());
         let shift = instruction.imm5();
+
+        self.delayed_load();
 
         Ok(self.set_register(destination, value >> shift))
     }
@@ -333,6 +369,8 @@ impl CPU {
         let shift = instruction.imm5();
         let value = (self.register(instruction.rt()) as i32) >> shift;
 
+        self.delayed_load();
+
         Ok(self.set_register(destination, value as u32))
     }
 
@@ -340,6 +378,8 @@ impl CPU {
         let destination = instruction.rd();
         let shift = self.register(instruction.rs());
         let value = self.register(instruction.rt()) << shift & 0x1f;
+
+        self.delayed_load();
 
         Ok(self.set_register(destination, value))
     }
@@ -355,23 +395,32 @@ impl CPU {
     fn op_jr(&mut self, instruction: Instruction) -> Result<(), String> {
         let value = instruction.rs();
         self.next_pc = self.register(value);
+        self.branch = true;
+        self.delayed_load();
         Ok(())
     }
 
     fn op_jalr(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rd();
         let value = self.register(instruction.rs());
-
-        self.set_register(target, self.next_pc);
+        let ra = self.next_pc;
         self.next_pc = value;
+
+        self.delayed_load();
+
+        self.set_register(target, ra);
+        self.branch = true;
+
         Ok(())
     }
 
     fn op_syscall(&mut self, _instruction: Instruction) -> Result<(), String> {
+        self.delayed_load();
         self.exception(Exception::Syscall)
     }
 
     fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
+        self.delayed_load();
         self.exception(Exception::Break)?;
         Err(String::from(
             "We don't know the exception number for break.",
@@ -380,23 +429,33 @@ impl CPU {
 
     fn op_mfhi(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        Ok(self.set_register(destination, self.hi))
+        let hi = self.hi;
+
+        self.delayed_load();
+
+        Ok(self.set_register(destination, hi))
     }
 
     fn op_mthi(&mut self, instruction: Instruction) -> Result<(), String> {
         let source = self.register(instruction.rs());
         self.hi = source;
+        self.delayed_load();
         Ok(())
     }
 
     fn op_mflo(&mut self, instruction: Instruction) -> Result<(), String> {
         let destination = instruction.rd();
-        Ok(self.set_register(destination, self.lo))
+        let lo = self.lo;
+
+        self.delayed_load();
+
+        Ok(self.set_register(destination, lo))
     }
 
     fn op_mtlo(&mut self, instruction: Instruction) -> Result<(), String> {
         let source = self.register(instruction.rs());
         self.lo = source;
+        self.delayed_load();
         Ok(())
     }
 
@@ -411,6 +470,8 @@ impl CPU {
     fn op_div(&mut self, instruction: Instruction) -> Result<(), String> {
         let dimmadome = self.register(instruction.rs()) as i32;
         let divisor = self.register(instruction.rt()) as i32;
+
+        self.delayed_load();
 
         if divisor == 0 {
             self.hi = dimmadome as u32;
@@ -434,6 +495,8 @@ impl CPU {
         let dimmadome = self.register(instruction.rs());
         let divisor = self.register(instruction.rt());
 
+        self.delayed_load();
+
         if dimmadome == 0 {
             self.hi = dimmadome;
             self.lo = 0xffffffff;
@@ -449,6 +512,8 @@ impl CPU {
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
 
+        self.delayed_load();
+
         let value = match left.checked_add(right) {
             Some(value) => value as u32,
             None => return Err(String::from("ADD overflow")),
@@ -462,6 +527,8 @@ impl CPU {
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
+        self.delayed_load();
+
         Ok(self.set_register(target, left.wrapping_add(right)))
     }
 
@@ -469,6 +536,8 @@ impl CPU {
         let target = instruction.rd();
         let left = self.register(instruction.rs()) as i32;
         let right = self.register(instruction.rt()) as i32;
+
+        self.delayed_load();
 
         let value = match left.checked_sub(right) {
             Some(value) => value as u32,
@@ -483,6 +552,8 @@ impl CPU {
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
+        self.delayed_load();
+
         Ok(self.set_register(target, left.wrapping_sub(right)))
     }
 
@@ -490,6 +561,8 @@ impl CPU {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
+
+        self.delayed_load();
 
         Ok(self.set_register(target, left & right))
     }
@@ -499,6 +572,8 @@ impl CPU {
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
+        self.delayed_load();
+
         Ok(self.set_register(target, left | right))
     }
 
@@ -506,6 +581,8 @@ impl CPU {
         let target = instruction.rd();
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
+
+        self.delayed_load();
 
         Ok(self.set_register(target, left ^ right))
     }
@@ -515,6 +592,8 @@ impl CPU {
         let left = self.register(instruction.rs());
         let right = self.register(instruction.rt());
 
+        self.delayed_load();
+
         Ok(self.set_register(target, !(left | right)))
     }
 
@@ -522,6 +601,8 @@ impl CPU {
         let target = instruction.rt();
         let imm = instruction.imm16_se() as i32;
         let source = self.register(instruction.rs()) as i32;
+
+        self.delayed_load();
 
         let value = match source.checked_add(imm) {
             Some(value) => value as u32,
@@ -536,6 +617,8 @@ impl CPU {
         let imm = instruction.imm16_se();
         let source = self.register(instruction.rs());
 
+        self.delayed_load();
+
         Ok(self.set_register(target, source.wrapping_add(imm)))
     }
 
@@ -543,6 +626,8 @@ impl CPU {
         let imm = instruction.imm16_se() as i32;
         let source = self.register(instruction.rs()) as i32;
         let target = instruction.rt();
+
+        self.delayed_load();
 
         Ok(self.set_register(target, (source < imm) as u32))
     }
@@ -552,6 +637,8 @@ impl CPU {
         let source = self.register(instruction.rs());
         let target = instruction.rt();
 
+        self.delayed_load();
+
         Ok(self.set_register(target, (source < imm) as u32))
     }
 
@@ -559,6 +646,8 @@ impl CPU {
         let target = instruction.rt();
         let imm = instruction.imm16();
         let source = instruction.rs();
+
+        self.delayed_load();
 
         Ok(self.set_register(target, self.register(source) & imm))
     }
@@ -568,6 +657,8 @@ impl CPU {
         let imm = instruction.imm16();
         let source = instruction.rs();
 
+        self.delayed_load();
+
         Ok(self.set_register(target, self.register(source) | imm))
     }
 
@@ -576,12 +667,16 @@ impl CPU {
         let imm = instruction.imm16();
         let source = instruction.rs();
 
+        self.delayed_load();
+
         Ok(self.set_register(target, self.register(source) ^ imm))
     }
 
     fn op_lui(&mut self, instruction: Instruction) -> Result<(), String> {
         let target = instruction.rt();
         let value = instruction.imm16();
+
+        self.delayed_load();
 
         Ok(self.set_register(target, value << 16))
     }
@@ -596,6 +691,8 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
+        self.delayed_load();
+
         self.store::<u8>(base.wrapping_add(offset), value as u8)
     }
 
@@ -608,6 +705,8 @@ impl CPU {
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
+
+        self.delayed_load();
 
         if offset % 2 == 0 {
             self.store::<u16>(base.wrapping_add(offset), value as u16)
@@ -626,6 +725,8 @@ impl CPU {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
 
+        self.delayed_load();
+
         if offset % 4 == 0 {
             self.store::<u32>(base.wrapping_add(offset), value)
         } else {
@@ -638,8 +739,8 @@ impl CPU {
         let offset = self.register(instruction.rs());
         let target_index = instruction.rt();
 
-        let value = self.load::<u8>(base.wrapping_add(offset))? as i8;
-        self.pending_load = (target_index, value as u32);
+        let value = (self.load::<u8>(base.wrapping_add(offset))? as i8) as i32;
+        self.delayed_load_chain(target_index, value as u32);
         Ok(())
     }
 
@@ -654,8 +755,8 @@ impl CPU {
         let target_index = instruction.rt();
 
         if offset % 2 == 0 {
-            let value = self.load::<u16>(base.wrapping_add(offset))? as i16;
-            self.pending_load = (target_index, value as u32);
+            let value = (self.load::<u16>(base.wrapping_add(offset))? as i16) as i32;
+            self.delayed_load_chain(target_index, value as u32);
             Ok(())
         } else {
             self.exception(Exception::AddressErrorLoad)
@@ -674,7 +775,7 @@ impl CPU {
 
         if offset % 4 == 0 {
             let value = self.load::<u32>(base.wrapping_add(offset))?;
-            self.pending_load = (target_index, value);
+            self.delayed_load_chain(target_index, value as u32);
             Ok(())
         } else {
             self.exception(Exception::AddressErrorLoad)
@@ -687,7 +788,7 @@ impl CPU {
         let target_index = instruction.rt();
 
         let value = self.load::<u8>(base.wrapping_add(offset))?;
-        self.pending_load = (target_index, value as u32);
+        self.delayed_load_chain(target_index, value as u32);
         Ok(())
     }
 
@@ -702,13 +803,13 @@ impl CPU {
         let target_index = instruction.rt();
 
         let value = self.load::<u16>(base.wrapping_add(offset))?;
-        self.pending_load = (target_index, value as u32);
+        self.delayed_load_chain(target_index, value as u32);
         Ok(())
     }
 
     fn exception(&mut self, cause: Exception) -> Result<(), String> {
         let handler = match self.sr & (1 << 22) != 0 {
-            true => 0xbfc00180,
+            true =>  0x80000180,
             false => 0x80000080,
         };
 
@@ -718,8 +819,16 @@ impl CPU {
         self.sr |= (mode << 2) & 0x3f;
         // </magic>
 
+        self.cause &= !0x7c;
         self.cause = (cause as u32) << 2;
-        self.epc = self.current_pc;
+
+        if self.delay {
+            self.epc = self.current_pc.wrapping_add(4);
+            self.cause |= 1 << 31;
+        } else {
+            self.epc = self.current_pc;
+            self.cause &= !(1 << 31);
+        }
 
         self.pc = handler;
         self.next_pc = self.pc.wrapping_add(4);
@@ -747,24 +856,16 @@ impl CPU {
         self.delay = self.branch;
         self.branch = false;
 
-        // <unsure>
-        let (register, value) = self.pending_load;
-        self.set_register(register, value);
-
-        self.pending_load = (RegisterIndex(0), 0);
-        // </unsure>
-
         if let Err(msg) = self.decode_and_execute(instruction) {
             self.panic_message(instruction, msg.as_str());
         }
-        self.input_registers = self.output_registers;
     }
 
     #[allow(dead_code)]
     fn dump_registers(&self) {
         debug!("Dumping registers:");
-        for i in 0..self.input_registers.len() {
-            debug!("    [{}] = 0x{:08X}", i, self.input_registers[i])
+        for i in 0..self.registers.len() {
+            debug!("    [{}] = 0x{:08X}", i, self.registers[i])
         }
     }
 
