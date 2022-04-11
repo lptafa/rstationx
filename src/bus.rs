@@ -78,7 +78,6 @@ impl Bus {
             | MemoryRegion::Timers => {
                 debug!("Ignoring write to {:?} range: 0x{:08X}", region, offset);
             }
-            _ => return Err(format!("Unhandled write to 0x{:08x} addr", addr)),
         }
         Ok(())
     }

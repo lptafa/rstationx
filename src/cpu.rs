@@ -110,7 +110,6 @@ impl CPU {
                     0x07 => self.op_srav(instruction),
                     0x08 => self.op_jr(instruction),
                     0x09 => self.op_jalr(instruction),
-
                     0x0C => self.op_syscall(instruction),
                     0x0D => self.op_break(instruction),
 
@@ -131,11 +130,10 @@ impl CPU {
                     0x25 => self.op_or(instruction),
                     0x26 => self.op_xor(instruction),
                     0x27 => self.op_nor(instruction),
-
                     0x2A => self.op_slt(instruction),
                     0x2B => self.op_sltu(instruction),
 
-                    op => Err(format!("Unhandled secondary opcode: 0x{:02x}", op)),
+                    _ => self.exception(Exception::IllegalInstruction),
                 }
             }
 
@@ -166,9 +164,9 @@ impl CPU {
                 )),
             },
 
-            0x11 => self.exception(Exception::CoprocessorError),
+            0x11 => self.exception(Exception::CoprocessorError), // COP1
             0x12 => self.op_cop2(instruction),
-            0x13 => self.exception(Exception::CoprocessorError),
+            0x13 => self.exception(Exception::CoprocessorError), // COP3
 
             0x20 => self.op_lb(instruction),
             0x21 => self.op_lh(instruction),
@@ -180,9 +178,21 @@ impl CPU {
 
             0x28 => self.op_sb(instruction),
             0x29 => self.op_sh(instruction),
+            0x2A => self.op_swl(instruction),
             0x2B => self.op_sw(instruction),
+            0x2E => self.op_swr(instruction),
 
-            op => Err(format!("Unhandled opcode 0x{:02x}", op)),
+            0x30 => self.exception(Exception::IllegalInstruction), // LWC0
+            0x31 => self.exception(Exception::IllegalInstruction), // LWC1
+            0x32 => self.op_lwc2(instruction),                     // LWC2
+            0x33 => self.exception(Exception::IllegalInstruction), // LWC3
+
+            0x38 => self.exception(Exception::IllegalInstruction), // SWC0
+            0x39 => self.exception(Exception::IllegalInstruction), // SWC1
+            0x3A => self.op_swc2(instruction),                     // SWC2
+            0x3B => self.exception(Exception::IllegalInstruction), // SWC3
+
+            _ => self.exception(Exception::IllegalInstruction),
         };
     }
 
@@ -432,12 +442,10 @@ impl CPU {
     }
 
     fn op_syscall(&mut self, _instruction: Instruction) -> Result<(), String> {
-        self.delayed_load();
         self.exception(Exception::Syscall)
     }
 
     fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
-        self.delayed_load();
         self.exception(Exception::Break)
     }
 
@@ -756,6 +764,60 @@ impl CPU {
         }
     }
 
+    fn op_swl(&mut self, instruction: Instruction) -> Result<(), String> {
+        if self.sr & 0x10000 != 0 {
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
+        }
+
+        let value = self.register(instruction.rt());
+        let base = instruction.imm16_se();
+        let offset = self.register(instruction.rs());
+
+        let addr = base.wrapping_add(offset);
+        let aligned_addr = addr & !0b11;
+        let aligned_word = self.load::<u32>(aligned_addr)?;
+
+        let new_val = match addr & 0b11 {
+            0 => (aligned_word & 0xffff_ff00) | (value >> 24),
+            1 => (aligned_word & 0xffff_0000) | (value >> 16),
+            2 => (aligned_word & 0xff00_0000) | (value >> 8),
+            3 => (aligned_word & 0x0000_0000) | (value >> 0),
+            _ => unreachable!(),
+        };
+
+        self.delayed_load();
+
+        self.store::<u32>(aligned_addr, new_val)
+    }
+
+    fn op_swr(&mut self, instruction: Instruction) -> Result<(), String> {
+        if self.sr & 0x10000 != 0 {
+            debug!("Ignoring load call while cache is isolated.");
+            return Ok(());
+        }
+
+        let value = self.register(instruction.rt());
+        let base = instruction.imm16_se();
+        let offset = self.register(instruction.rs());
+
+        let addr = base.wrapping_add(offset);
+        let aligned_addr = addr & !0b11;
+        let aligned_word = self.load::<u32>(aligned_addr)?;
+
+        let new_val = match addr & 0b11 {
+            0 => (aligned_word & 0x0000_0000) | (value << 0),
+            1 => (aligned_word & 0x0000_00ff) | (value << 8),
+            2 => (aligned_word & 0x0000_ffff) | (value << 16),
+            3 => (aligned_word & 0x00ff_ffff) | (value << 24),
+            _ => unreachable!(),
+        };
+
+        self.delayed_load();
+
+        self.store::<u32>(aligned_addr, new_val)
+    }
+
     fn op_lb(&mut self, instruction: Instruction) -> Result<(), String> {
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -895,7 +957,17 @@ impl CPU {
         Ok(())
     }
 
+    fn op_lwc2(&mut self, instruction: Instruction) -> Result<(), String> {
+        Err(format!("Unimplemented instruction: {}", instruction))
+    }
+
+    fn op_swc2(&mut self, instruction: Instruction) -> Result<(), String> {
+        Err(format!("Unimplemented instruction: {}", instruction))
+    }
+
     fn exception(&mut self, cause: Exception) -> Result<(), String> {
+        self.delayed_load();
+
         let handler = match self.sr & (1 << 22) != 0 {
             true => 0x80000180,
             false => 0x80000080,
@@ -977,7 +1049,7 @@ enum Exception {
     BusErrorLoad = 0x7,
     Syscall = 0x8,
     Break = 0x9,
-    Reserved = 0xA,
+    IllegalInstruction = 0xA,
     CoprocessorError = 0xB,
     Overflow = 0xC,
 }

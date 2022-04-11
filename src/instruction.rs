@@ -110,12 +110,28 @@ impl Instruction {
 
             0x20 => "lb",
             0x21 => "lh",
+            0x22 => "lwl",
             0x23 => "lw",
             0x24 => "lbu",
             0x25 => "lhu",
+            0x26 => "lwr",
+
             0x28 => "sb",
             0x29 => "sh",
+            0x2A => "swl",
             0x2B => "sw",
+            0x2E => "swr",
+
+            0x30 => "lwc0",
+            0x31 => "lwc1",
+            0x32 => "lwc2",
+            0x33 => "lwc3",
+
+            0x38 => "swc0",
+            0x39 => "swc1",
+            0x3A => "swc2",
+            0x3B => "swc3",
+
             _ => "Invalid opcode",
         }
     }
