@@ -14,7 +14,7 @@ enum AddressMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum SyncMode {
+pub enum SyncMode {
     Manual = 0,
     Request = 1,
     LinkedList = 2,
@@ -54,6 +54,18 @@ impl Channel {
             block_count: 0,
             block_size: 0,
         }
+    }
+
+    pub fn active(&self) -> bool {
+        self.enable
+            && match self.sync_mode {
+                SyncMode::Manual => self.manual_trigger,
+                _ => true,
+            }
+    }
+
+    pub fn sync_mode(&self) -> SyncMode {
+        self.sync_mode
     }
 
     pub fn base(&self) -> u32 {
@@ -145,7 +157,7 @@ pub struct DMA {
 //       explicitly specify a port in the code. The guide says it'll be useful later so
 //       I'm just adding it here while I'm at it.
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Port {
     MacroDecoderIn,
     MacroDecoderOut,

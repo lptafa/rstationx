@@ -1,7 +1,7 @@
 // It's bussin my g
 
 use crate::bios::BIOS;
-use crate::dma::{Port, DMA};
+use crate::dma::{Port, SyncMode, DMA};
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -24,60 +24,6 @@ impl Bus {
             ram,
             gpu,
             dma,
-        }
-    }
-
-    fn dma_register(&self, offset: u32) -> Result<u32, String> {
-        let (major, minor) = (offset >> 4, offset & 0b1111);
-        match major {
-            // Channels
-            0x0..=0x6 => {
-                let port = Port::from_index(major).unwrap();
-                let channel = self.dma.channel(port);
-                match minor {
-                    0x0 => Ok(channel.base()),
-                    0x4 => Ok(channel.block_control()),
-                    0x8 => Ok(channel.control()),
-                    _ => Err(format!(
-                        "Unsupported read from minor register {} for channel {}",
-                        minor, major
-                    )),
-                }
-            }
-            // Common DMA registers
-            0x7 => match minor {
-                0x0 => Ok(self.dma.control()),
-                0x4 => Ok(self.dma.interrupt()),
-                _ => Err(format!(
-                    "Unsupported read from minor register {} for major 0x7",
-                    minor
-                )),
-            },
-            _ => Err(format!("Unhandled DMA register read: 0x{:08X}", offset)),
-        }
-    }
-
-    fn set_dma_register(&mut self, offset: u32, value: u32) -> Result<(), String> {
-        let (major, minor) = (offset >> 4, offset & 0b1111);
-        match major {
-            // Channels
-            0x0..=0x6 => {
-                let port = Port::from_index(major).unwrap();
-                let channel = self.dma.channel_mut(port);
-                match minor {
-                    0x0 => Ok(channel.set_base(value)),
-                    0x4 => Ok(channel.set_block_control(value)),
-                    0x8 => channel.set_control(value),  // Might fail, so we propagate the error
-                    _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
-                }
-            }
-            // Common DMA registers
-            0x7 => match minor {
-                0x0 => Ok(self.dma.set_control(value)),
-                0x4 => Ok(self.dma.set_interrupt(value)),
-                _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
-            }
-            _ => Err(format!("Unhandled DMA register write: 0x{:04X}, value=0x{:08X}", offset, value)),
         }
     }
 
@@ -141,6 +87,95 @@ impl Bus {
             }
         }
         Ok(())
+    }
+
+    fn dma_register(&self, offset: u32) -> Result<u32, String> {
+        let (major, minor) = (offset >> 4, offset & 0b1111);
+        match major {
+            // Channels
+            0x0..=0x6 => {
+                let port = Port::from_index(major).unwrap();
+                let channel = self.dma.channel(port);
+                match minor {
+                    0x0 => Ok(channel.base()),
+                    0x4 => Ok(channel.block_control()),
+                    0x8 => Ok(channel.control()),
+                    _ => Err(format!(
+                        "Unsupported read from minor register {} for channel {}",
+                        minor, major
+                    )),
+                }
+            }
+            // Common DMA registers
+            0x7 => match minor {
+                0x0 => Ok(self.dma.control()),
+                0x4 => Ok(self.dma.interrupt()),
+                _ => Err(format!(
+                    "Unsupported read from minor register {} for major 0x7",
+                    minor
+                )),
+            },
+            _ => Err(format!("Unhandled DMA register read: 0x{:08X}", offset)),
+        }
+    }
+
+    fn set_dma_register(&mut self, offset: u32, value: u32) -> Result<(), String> {
+        let (major, minor) = (offset >> 4, offset & 0b1111);
+        let active_port = match major {
+            // Channels
+            0x0..=0x6 => {
+                let port = Port::from_index(major).unwrap();
+                let channel = self.dma.channel_mut(port);
+                match minor {
+                    0x0 => channel.set_base(value),
+                    0x4 => channel.set_block_control(value),
+                    0x8 => channel.set_control(value)?,  // Might fail, so we propagate the error
+                    _ => return Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+                }
+
+                if channel.active() {
+                    Some(port)
+                } else {
+                    None
+                }
+            }
+            // Common DMA registers
+            0x7 => {
+                match minor {
+                    0x0 => self.dma.set_control(value),
+                    0x4 => self.dma.set_interrupt(value),
+                    _ => return Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+                }
+                None
+            }
+            _ => {
+                return Err(format!(
+                    "Unhandled DMA register write: 0x{:04X}, value=0x{:08X}",
+                    offset, value
+                ))
+            }
+        };
+
+        if let Some(port) = active_port {
+            self.do_dma(port)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn do_dma(&mut self, port: Port) -> Result<(), String> {
+        match self.dma.channel(port).sync_mode() {
+            SyncMode::LinkedList => self.do_dma_linked_list(port),
+            _ => self.do_dma_block(port),
+        }
+    }
+
+    fn do_dma_block(&mut self, port: Port) -> Result<(), String> {
+        Err(format!("DMA Block not implemented, port: {:?}", port))
+    }
+
+    fn do_dma_linked_list(&mut self, port: Port) -> Result<(), String> {
+        Err(format!("DMA LinkedList not implemented, port: {:?}", port))
     }
 }
 
