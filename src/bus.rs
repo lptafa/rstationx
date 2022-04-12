@@ -1,5 +1,4 @@
 // It's bussin my g
-use log::debug;
 
 use crate::bios::BIOS;
 use crate::dma::{Port, DMA};
@@ -68,7 +67,7 @@ impl Bus {
                 match minor {
                     0x0 => Ok(channel.set_base(value)),
                     0x4 => Ok(channel.set_block_control(value)),
-                    0x8 => Ok(channel.set_control(value)),
+                    0x8 => channel.set_control(value),  // Might fail, so we propagate the error
                     _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
                 }
             }

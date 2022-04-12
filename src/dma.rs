@@ -1,4 +1,5 @@
 use log::debug;
+use std::string::String;
 
 #[derive(Debug, Copy, Clone)]
 enum Direction {
@@ -86,7 +87,7 @@ impl Channel {
             | (self.dummy as u32) << 29;
     }
 
-    pub fn set_control(&mut self, value: u32) {
+    pub fn set_control(&mut self, value: u32) -> Result<(), String> {
         debug!("Writing 0x{:08X} to control register", value);
         match value & 0b1 {
             0 => self.direction = Direction::ToDevice,
@@ -100,12 +101,17 @@ impl Channel {
             _ => unreachable!(),
         }
 
-        match (value >> 9) & 0b11 {
+        let sync_mode = (value >> 9) & 0b11;
+        match sync_mode {
             0 => self.sync_mode = SyncMode::Manual,
             1 => self.sync_mode = SyncMode::Request,
             2 => self.sync_mode = SyncMode::LinkedList,
-            // FIXME: Propogate this error up?
-            _ => panic!("Invalid sync mode (4) in DMA control register write"),
+            _ => {
+                return Err(format!(
+                    "Invalid sync mode {} in set control for DMA register",
+                    sync_mode
+                ))
+            }
         }
 
         self.chop = (value & (1 << 8)) != 0;
@@ -116,6 +122,8 @@ impl Channel {
         self.chop_cpu_size = ((value >> 20) & 0b111) as u8;
 
         self.dummy = ((value >> 29) & 0b11) as u8;
+
+        Ok(())
     }
 }
 
