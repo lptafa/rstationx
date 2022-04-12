@@ -37,6 +37,7 @@ impl Bus {
                 let channel = self.dma.channel(port);
                 match minor {
                     0x0 => Ok(channel.base()),
+                    0x4 => Ok(channel.block_control()),
                     0x8 => Ok(channel.control()),
                     _ => Err(format!(
                         "Unsupported read from minor register {} for channel {}",
@@ -66,6 +67,7 @@ impl Bus {
                 let channel = self.dma.channel_mut(port);
                 match minor {
                     0x0 => Ok(channel.set_base(value)),
+                    0x4 => Ok(channel.set_block_control(value)),
                     0x8 => Ok(channel.set_control(value)),
                     _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
                 }
@@ -123,7 +125,7 @@ impl Bus {
                     (4, 0x1f802000) => Ok(()),
                     (4, _) => Err(format!("Bad expansion 2 base address")),
                     _ => {
-                        debug!("Unhandled write to MEMCONTROL register.");
+                        trace!("Unhandled write to MEMCONTROL register.");
                         Ok(())
                     }
                 };
@@ -136,7 +138,7 @@ impl Bus {
             | MemoryRegion::SPU
             | MemoryRegion::GPU
             | MemoryRegion::Timers => {
-                debug!("Ignoring write to {:?} range: 0x{:08X}", region, offset);
+                trace!("Ignoring write to {:?} range: 0x{:08X}", region, offset);
             }
         }
         Ok(())

@@ -713,7 +713,7 @@ impl CPU {
 
     fn op_sb(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -728,7 +728,7 @@ impl CPU {
 
     fn op_sh(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -747,7 +747,7 @@ impl CPU {
 
     fn op_sw(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -766,7 +766,7 @@ impl CPU {
 
     fn op_swl(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -793,7 +793,7 @@ impl CPU {
 
     fn op_swr(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -830,7 +830,7 @@ impl CPU {
 
     fn op_lh(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -849,7 +849,7 @@ impl CPU {
 
     fn op_lw(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -868,7 +868,7 @@ impl CPU {
 
     fn op_lwl(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -901,7 +901,7 @@ impl CPU {
 
     fn op_lwr(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 
@@ -944,7 +944,7 @@ impl CPU {
 
     fn op_lhu(&mut self, instruction: Instruction) -> Result<(), String> {
         if self.sr & 0x10000 != 0 {
-            debug!("Ignoring load call while cache is isolated.");
+            trace!("Ignoring load call while cache is isolated.");
             return Ok(());
         }
 

@@ -1,3 +1,5 @@
+use log::debug;
+
 #[derive(Debug, Copy, Clone)]
 enum Direction {
     ToDevice = 0,
@@ -30,6 +32,9 @@ pub struct Channel {
     dummy: u8,
 
     base: u32,
+
+    block_count: u16,
+    block_size: u16,
 }
 
 impl Channel {
@@ -45,6 +50,8 @@ impl Channel {
             chop_cpu_size: 0,
             dummy: 0,
             base: 0,
+            block_count: 0,
+            block_size: 0,
         }
     }
 
@@ -53,7 +60,18 @@ impl Channel {
     }
 
     pub fn set_base(&mut self, base: u32) {
+        debug!("Writing 0x{:08X} to base register", base);
         self.base = base;
+    }
+
+    pub fn block_control(&self) -> u32 {
+        self.block_size as u32 | ((self.block_count as u32) << 16)
+    }
+
+    pub fn set_block_control(&mut self, block_control: u32) {
+        debug!("Writing 0x{:08X} to block control register", block_control);
+        self.block_size = block_control as u16;
+        self.block_count = (block_control >> 16) as u16;
     }
 
     pub fn control(&self) -> u32 {
@@ -69,6 +87,7 @@ impl Channel {
     }
 
     pub fn set_control(&mut self, value: u32) {
+        debug!("Writing 0x{:08X} to control register", value);
         match value & 0b1 {
             0 => self.direction = Direction::ToDevice,
             1 => self.direction = Direction::FromDevice,
