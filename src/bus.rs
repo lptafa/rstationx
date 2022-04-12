@@ -2,7 +2,7 @@
 use log::debug;
 
 use crate::bios::BIOS;
-use crate::dma::DMA;
+use crate::dma::{Port, DMA};
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -28,17 +28,53 @@ impl Bus {
         }
     }
 
-    fn dma_register(&self, address: u32) -> Result<u32, String> {
-        match address {
-            0x70 => Ok(self.dma.control()),
-            _ => Err(format!("Unhandled DMA register: 0x{:08X}", address)),
+    fn dma_register(&self, offset: u32) -> Result<u32, String> {
+        let (major, minor) = (offset >> 4, offset & 0b1111);
+        match major {
+            // Channels
+            0x0..=0x6 => {
+                let port = Port::from_index(major).unwrap();
+                let channel = self.dma.channel(port);
+                match minor {
+                    0x8 => Ok(channel.control()),
+                    _ => Err(format!(
+                        "Unsupported read from minor register {} for channel {}",
+                        minor, major
+                    )),
+                }
+            }
+            // Common DMA registers
+            0x7 => match minor {
+                0x0 => Ok(self.dma.control()),
+                0x4 => Ok(self.dma.interrupt()),
+                _ => Err(format!(
+                    "Unsupported read from minor register {} for major 0x7",
+                    minor
+                )),
+            },
+            _ => Err(format!("Unhandled DMA register read: 0x{:08X}", offset)),
         }
     }
 
-    fn set_dma_register(&mut self, address: u32, value: u32) -> Result<(), String> {
-        match address {
-            0x70 => Ok(self.dma.set_control(value)),
-            _ => Err(format!("Unhandled DMA register: 0x{:08X}", address)),
+    fn set_dma_register(&mut self, offset: u32, value: u32) -> Result<(), String> {
+        let (major, minor) = (offset >> 4, offset & 0b1111);
+        match major {
+            // Channels
+            0x0..=0x6 => {
+                let port = Port::from_index(major).unwrap();
+                let channel = self.dma.channel_mut(port);
+                match minor {
+                    0x8 => Ok(channel.set_control(value)),
+                    _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+                }
+            }
+            // Common DMA registers
+            0x7 => match minor {
+                0x0 => Ok(self.dma.set_control(value)),
+                0x4 => Ok(self.dma.set_interrupt(value)),
+                _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+            }
+            _ => Err(format!("Unhandled DMA register write: 0x{:04X}, value=0x{:08X}", offset, value)),
         }
     }
 
