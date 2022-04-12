@@ -36,6 +36,7 @@ impl Bus {
                 let port = Port::from_index(major).unwrap();
                 let channel = self.dma.channel(port);
                 match minor {
+                    0x0 => Ok(channel.base()),
                     0x8 => Ok(channel.control()),
                     _ => Err(format!(
                         "Unsupported read from minor register {} for channel {}",
@@ -64,6 +65,7 @@ impl Bus {
                 let port = Port::from_index(major).unwrap();
                 let channel = self.dma.channel_mut(port);
                 match minor {
+                    0x0 => Ok(channel.set_base(value)),
                     0x8 => Ok(channel.set_control(value)),
                     _ => Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
                 }
