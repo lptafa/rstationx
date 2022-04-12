@@ -25,6 +25,15 @@ pub struct CPU {
     registers: [u32; 32],
 }
 
+macro_rules! ignore_cache {
+    ($self:ident) => {
+        if $self.sr & 0x10000 != 0 {
+            trace!("Ignoring load call while cache is isolated.");
+            return Ok(());
+        }
+    };
+}
+
 impl CPU {
     pub fn new(bus: Bus) -> CPU {
         let mut registers = [0xcafebabe; 32];
@@ -712,10 +721,7 @@ impl CPU {
     }
 
     fn op_sb(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
@@ -727,10 +733,7 @@ impl CPU {
     }
 
     fn op_sh(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
@@ -746,10 +749,7 @@ impl CPU {
     }
 
     fn op_sw(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
@@ -765,10 +765,7 @@ impl CPU {
     }
 
     fn op_swl(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
@@ -792,10 +789,7 @@ impl CPU {
     }
 
     fn op_swr(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let value = self.register(instruction.rt());
         let base = instruction.imm16_se();
@@ -829,10 +823,7 @@ impl CPU {
     }
 
     fn op_lh(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -848,10 +839,7 @@ impl CPU {
     }
 
     fn op_lw(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -867,10 +855,7 @@ impl CPU {
     }
 
     fn op_lwl(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -900,10 +885,7 @@ impl CPU {
     }
 
     fn op_lwr(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
@@ -943,10 +925,7 @@ impl CPU {
     }
 
     fn op_lhu(&mut self, instruction: Instruction) -> Result<(), String> {
-        if self.sr & 0x10000 != 0 {
-            trace!("Ignoring load call while cache is isolated.");
-            return Ok(());
-        }
+        ignore_cache!(self);
 
         let base = instruction.imm16_se();
         let offset = self.register(instruction.rs());
