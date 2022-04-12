@@ -2,6 +2,7 @@
 use log::debug;
 
 use crate::bios::BIOS;
+use crate::dma::DMA;
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -13,11 +14,32 @@ pub struct Bus {
     bios: BIOS,
     gpu: GPU,
     ram: RAM,
+    dma: DMA,
 }
 
 impl Bus {
     pub fn new(bios: BIOS, ram: RAM, gpu: GPU) -> Bus {
-        Bus { bios, ram, gpu }
+        let dma = DMA::new();
+        Bus {
+            bios,
+            ram,
+            gpu,
+            dma,
+        }
+    }
+
+    fn dma_register(&self, address: u32) -> Result<u32, String> {
+        match address {
+            0x70 => Ok(self.dma.control()),
+            _ => Err(format!("Unhandled DMA register: 0x{:08X}", address)),
+        }
+    }
+
+    fn set_dma_register(&mut self, address: u32, value: u32) -> Result<(), String> {
+        match address {
+            0x70 => Ok(self.dma.set_control(value)),
+            _ => Err(format!("Unhandled DMA register: 0x{:08X}", address)),
+        }
     }
 
     pub fn load<T: TryFrom<u32>>(&self, addr: u32) -> Result<T, String> {
@@ -27,10 +49,10 @@ impl Bus {
         return match region {
             MemoryRegion::BIOS => Ok(utils::load::<T>(&self.bios.data, offset)),
             MemoryRegion::RAM => Ok(utils::load::<T>(&self.ram.data, offset)),
-            MemoryRegion::IRQControl
-            | MemoryRegion::Timers
-            | MemoryRegion::DMA
-            | MemoryRegion::SPU => {
+            // FIXME: This is ugly, maybe find a nice way to convert the error from
+            //        T.try_into() into our own error type (String)?
+            MemoryRegion::DMA => Ok(utils::to_t(self.dma_register(offset)?)),
+            MemoryRegion::IRQControl | MemoryRegion::Timers | MemoryRegion::SPU => {
                 trace!("Unhandled load at {:?} range.", region);
                 Ok(utils::to_t(0))
             }
@@ -54,6 +76,7 @@ impl Bus {
         match region {
             MemoryRegion::RAM => utils::store::<T>(&mut self.ram.data, offset, value),
             MemoryRegion::BIOS => return Err(String::from("Illegal write to BIOS memory")),
+            MemoryRegion::DMA => return self.set_dma_register(offset, value.into()),
             MemoryRegion::MemControl => {
                 let value = value.into();
                 return match (offset, value) {
@@ -73,7 +96,6 @@ impl Bus {
             | MemoryRegion::RAMSize
             | MemoryRegion::CacheControl
             | MemoryRegion::SPU
-            | MemoryRegion::DMA
             | MemoryRegion::GPU
             | MemoryRegion::Timers => {
                 debug!("Ignoring write to {:?} range: 0x{:08X}", region, offset);

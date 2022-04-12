@@ -2,6 +2,7 @@
 mod bios;
 mod bus;
 mod cpu;
+mod dma;
 mod gpu;
 mod instruction;
 mod map;
