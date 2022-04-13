@@ -181,18 +181,11 @@ impl GPU {
         match opcode {
             0x00 => Ok(()),
             0xe1 => self.gp0_draw_mode(val),
+            0xe2 => self.gp0_texture_window(val),
+            0xe3 => self.gp0_drawing_area_top_left(val),
+            0xe4 => self.gp0_drawing_area_bottom_right(val),
+            0xe5 => self.gp0_drawing_offset(val),
             _ => Error!("Unhandled GP0 command 0x{:08x}", val),
-        }
-    }
-
-    pub fn gp1(&mut self, val: u32) -> Result<(), String> {
-        let opcode = (val >> 24) & 0xff;
-
-        match opcode {
-            0x00 => self.gp1_reset(val),
-            0x04 => self.gp1_dma_direction(val),
-            0x08 => self.gp1_display_mode(val),
-            _ => Error!("Unhandled GP1 command 0x{:08x}", val),
         }
     }
 
@@ -215,6 +208,51 @@ impl GPU {
         self.texture_flip.1 = ((val >> 13) & 1) != 0;
 
         Ok(())
+    }
+
+    fn gp0_texture_window(&mut self, val: u32) -> Result<(), String> {
+        let x_mask = (val & 0x1f) as u8;
+        let y_mask = ((val >> 5) & 0x1f) as u8;
+        self.texture_window_mask = (x_mask, y_mask);
+
+        let x_offset = ((val >> 10) & 0x1f) as u8;
+        let y_offset = ((val >> 15) & 0x1f) as u8;
+        self.texture_window_offset = (x_offset, y_offset);
+        Ok(())
+    }
+
+    fn gp0_drawing_area_top_left(&mut self, val: u32) -> Result<(), String> {
+        self.drawing_area.top = ((val >> 10) & 0x3ff) as u16;
+        self.drawing_area.left = (val & 0x3ff) as u16;
+        Ok(())
+    }
+
+    fn gp0_drawing_area_bottom_right(&mut self, val: u32) -> Result<(), String> {
+        self.drawing_area.top = ((val >> 10) & 0x3ff) as u16;
+        self.drawing_area.left = (val & 0x3ff) as u16;
+        Ok(())
+    }
+
+    fn gp0_drawing_offset(&mut self, val: u32) -> Result<(), String> {
+        let x = (val & 0x7ff) as u16;
+        let y = ((val >> 11) & 0x7ff) as u16;
+
+        let x_se = ((x << 5) as i16) >> 5; // what the fuck
+        let y_se = ((y << 5) as i16) >> 5;
+
+        self.drawing_offset = (x_se, y_se);
+        Ok(())
+    }
+
+    pub fn gp1(&mut self, val: u32) -> Result<(), String> {
+        let opcode = (val >> 24) & 0xff;
+
+        match opcode {
+            0x00 => self.gp1_reset(val),
+            0x04 => self.gp1_dma_direction(val),
+            0x08 => self.gp1_display_mode(val),
+            _ => Error!("Unhandled GP1 command 0x{:08x}", val),
+        }
     }
 
     fn gp1_reset(&mut self, _: u32) -> Result<(), String> {
