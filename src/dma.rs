@@ -3,13 +3,13 @@ use log::debug;
 use std::string::String;
 
 #[derive(Debug, Copy, Clone)]
-enum Direction {
+pub enum Direction {
     ToDevice = 0,
     FromDevice = 1,
 }
 
 #[derive(Debug, Copy, Clone)]
-enum AddressMode {
+pub enum AddressMode {
     Increment = 0,
     Decrement = 1,
 }
@@ -71,6 +71,10 @@ impl Channel {
 
     pub fn base(&self) -> u32 {
         self.base
+    }
+
+    pub fn address_mode(&self) -> AddressMode {
+        self.address_mode
     }
 
     pub fn set_base(&mut self, base: u32) {

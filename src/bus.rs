@@ -1,7 +1,7 @@
 // It's bussin my g
 
 use crate::bios::BIOS;
-use crate::dma::{Port, SyncMode, DMA};
+use crate::dma::{Port, SyncMode, DMA, AddressMode};
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -172,6 +172,14 @@ impl Bus {
     }
 
     fn do_dma_block(&mut self, port: Port) -> Result<(), String> {
+        let channel = self.dma.channel_mut(port);
+        let increment = match channel.address_mode() {
+            AddressMode::Increment =>  4,
+            AddressMode::Decrement => -4,
+        };
+
+
+
         Error!("DMA Block not implemented, port: {:?}", port)
     }
 
