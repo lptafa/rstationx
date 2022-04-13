@@ -2,7 +2,7 @@ use crate::utils::Error;
 use log::debug;
 use std::string::String;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Direction {
     ToDevice = 0,
     FromDevice = 1,
@@ -73,6 +73,10 @@ impl Channel {
         self.base
     }
 
+    pub fn direction(&self) -> Direction {
+        self.direction
+    }
+
     pub fn address_mode(&self) -> AddressMode {
         self.address_mode
     }
@@ -90,6 +94,23 @@ impl Channel {
         debug!("Writing 0x{:08X} to block control register", block_control);
         self.block_size = block_control as u16;
         self.block_count = (block_control >> 16) as u16;
+    }
+
+    pub fn transfer_size(&mut self) -> Result<u32, String> {
+        let size = self.block_size as u32;
+        let count = self.block_count as u32;
+
+        match self.sync_mode {
+            SyncMode::Manual => Ok(size),
+            SyncMode::Request => Ok(count * size),
+            SyncMode::LinkedList => Error!("No linked list mode implemented for DMA channel."),
+        }
+    }
+
+    pub fn set_finished(&mut self) {
+        self.enable = false;
+        self.manual_trigger = false;
+        debug!("Finished DMA channel");
     }
 
     pub fn control(&self) -> u32 {
@@ -162,7 +183,7 @@ pub struct DMA {
 //       explicitly specify a port in the code. The guide says it'll be useful later so
 //       I'm just adding it here while I'm at it.
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Port {
     MacroDecoderIn,
     MacroDecoderOut,

@@ -1,7 +1,7 @@
 // It's bussin my g
 
 use crate::bios::BIOS;
-use crate::dma::{Port, SyncMode, DMA, AddressMode};
+use crate::dma::{Port, SyncMode, DMA, AddressMode, Direction};
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -172,19 +172,88 @@ impl Bus {
     }
 
     fn do_dma_block(&mut self, port: Port) -> Result<(), String> {
+        debug!("Doing DMA block ;^) port: {:?}", port);
         let channel = self.dma.channel_mut(port);
-        let increment = match channel.address_mode() {
-            AddressMode::Increment =>  4,
-            AddressMode::Decrement => -4,
+        let increment: bool = match channel.address_mode() {
+            AddressMode::Increment =>  true,
+            AddressMode::Decrement => false,
         };
 
+        let mut addr = channel.base();
 
+        let mut remaining = channel.transfer_size()?;
 
-        Error!("DMA Block not implemented, port: {:?}", port)
+        while remaining > 0 {
+            let current_addr = addr & 0x1f_fffc;
+
+            match channel.direction() {
+                Direction::FromDevice => {
+                    let source_word = utils::load::<u32>(&self.ram.data, current_addr);
+                    match port {
+                        Port::GPU => debug!("GPU data 0x{:08x}", source_word),
+                        _ => return Error!("Unhandled DMA destination port {:?}", port),
+                    }
+                },
+                Direction::ToDevice => {
+                    let source_word = match port {
+                        Port::OTC => match remaining {
+                            1 => 0xff_ffff,
+                            _ => addr.wrapping_sub(4) & 0x1f_ffff,
+                        }
+                        _ => return Error!("Unhandled DMA source port {:?}", port)
+                    };
+
+                    utils::store::<u32>(&mut self.ram.data, current_addr, source_word);
+                },
+            }
+            addr = if increment {
+                addr.wrapping_add(4)
+            } else {
+                addr.wrapping_sub(4)
+            };
+            remaining -= 1;
+        }
+        channel.set_finished();
+        Ok(())
     }
 
     fn do_dma_linked_list(&mut self, port: Port) -> Result<(), String> {
-        Error!("DMA LinkedList not implemented, port: {:?}", port)
+        let channel = self.dma.channel_mut(port);
+
+        let mut addr = channel.base() & 0x1f_fffc;
+
+        if channel.direction() == Direction::ToDevice {
+            return Error!("Invalid DMA direction for linked list mode");
+        }
+
+        if port != Port::GPU {
+            return Error!("Attempted linked list DMA on port {:?}", port);
+        }
+
+        loop {
+            let header = utils::load::<u32>(&self.ram.data, addr);
+
+            let mut remaining = header >> 24;
+
+            while remaining > 0 {
+                addr = (addr + 4) & 0x1f_fffc;
+
+                let command = utils::load::<u32>(&self.ram.data, addr);
+
+                debug!("GPU command 0x{:08x}", command);
+
+                remaining -= 1;
+            }
+
+            if header & 0x80_0000 != 0 {
+                break;
+            }
+
+            addr = header & 0x1f_fffc;
+        }
+
+        channel.set_finished();
+        Ok(())
     }
 }
 
