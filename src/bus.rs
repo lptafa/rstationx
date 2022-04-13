@@ -80,6 +80,7 @@ impl Bus {
                 let value = value.into();
                 match offset {
                 0 => return self.gpu.gp0(value),
+                4 => return self.gpu.gp1(value),
                 _ => return Error!("Unhandled GPU write {}: 0x{:08x}", offset, value),
                 }
             }
@@ -246,7 +247,7 @@ impl Bus {
 
                 let command = utils::load::<u32>(&self.ram.data, addr);
 
-                debug!("GPU command 0x{:08x}", command);
+                self.gpu.gp0(command)?;
 
                 remaining -= 1;
             }

@@ -185,6 +185,8 @@ impl GPU {
 
         match opcode {
             0x00 => self.gp1_reset(val),
+            0x04 => self.gp1_dma_direction(val),
+            0x08 => self.gp1_display_mode(val),
             _ => Error!("Unhandled GP1 command 0x{:08x}", val),
         }
     }
@@ -210,7 +212,7 @@ impl GPU {
         Ok(())
     }
 
-    fn gp1_reset(&mut self, _: u32) {
+    fn gp1_reset(&mut self, _: u32) -> Result<(), String>{
         self.interrupt = false;
 
         self.texture_base = (0, 0);
@@ -239,5 +241,50 @@ impl GPU {
         self.display_horiz_range = (0x200, 0xc00);
         self.display_line_range = (0x10, 0x100);
         self.display_depth = DisplayDepth::D15;
+        Ok(())
+    }
+
+    fn gp1_display_mode(&mut self, val: u32) -> Result<(), String>{
+        let hr1 = (val & 3) as u8;
+        let hr2 = ((val >> 6) & 1) as u8;
+
+        self.hres = HorizontalRes::from_fields(hr1, hr2);
+
+        self.vres = match val & 0x4 != 0 {
+            true => VerticalRes::Y240,
+            false => VerticalRes::Y480,
+        };
+
+        self.vmode = match val & 0x8 != 0 {
+            true => VMode::PAL,
+            false => VMode::NTSC,
+        };
+
+        self.display_depth = match val & 0x10 != 0 {
+            true => DisplayDepth::D15,
+            false => DisplayDepth::D24,
+        };
+
+        self.interlacing = val & 0x20 != 0;
+
+        if val & 0x80 != 0 {
+            return Error!("Unsupported display mode 0x{:08x}", val);
+        }
+        Ok(())
+    }
+
+    fn gp1_dma_direction(&mut self, val: u32) -> Result<(), String>{
+        self.dma_direction = match val & 3 {
+            0 => DMADirection::Off,
+            1 => DMADirection::FIFO,
+            2 => DMADirection::CPU2GP0,
+            3 => DMADirection::VRAM2CPU,
+            _ => unreachable!(),
+        };
+        Ok(())
+    }
+
+    pub fn read(&self) -> u32 {
+        0
     }
 }
