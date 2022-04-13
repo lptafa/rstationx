@@ -119,7 +119,12 @@ impl GPU {
 
             texture_window_mask: (0, 0),
             texture_window_offset: (0, 0),
-            drawing_area: DrawingArea { left: 0, right: 0, top: 0, bottom: 0 },
+            drawing_area: DrawingArea {
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+            },
             drawing_offset: (0, 0),
             display_vram_start: (0, 0),
             display_horiz_range: (0, 0),
@@ -212,7 +217,7 @@ impl GPU {
         Ok(())
     }
 
-    fn gp1_reset(&mut self, _: u32) -> Result<(), String>{
+    fn gp1_reset(&mut self, _: u32) -> Result<(), String> {
         self.interrupt = false;
 
         self.texture_base = (0, 0);
@@ -224,7 +229,12 @@ impl GPU {
         self.draw_to_display = false;
         self.texture_disable = false;
         self.texture_flip = (false, false);
-        self.drawing_area = DrawingArea{ left: 0, right: 0, top: 0, bottom: 0 };
+        self.drawing_area = DrawingArea {
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+        };
         self.drawing_offset = (0, 0);
         self.force_set_mask_bit = false;
         self.preserve_masked_pixels = false;
@@ -244,7 +254,7 @@ impl GPU {
         Ok(())
     }
 
-    fn gp1_display_mode(&mut self, val: u32) -> Result<(), String>{
+    fn gp1_display_mode(&mut self, val: u32) -> Result<(), String> {
         let hr1 = (val & 3) as u8;
         let hr2 = ((val >> 6) & 1) as u8;
 
@@ -273,7 +283,7 @@ impl GPU {
         Ok(())
     }
 
-    fn gp1_dma_direction(&mut self, val: u32) -> Result<(), String>{
+    fn gp1_dma_direction(&mut self, val: u32) -> Result<(), String> {
         self.dma_direction = match val & 3 {
             0 => DMADirection::Off,
             1 => DMADirection::FIFO,

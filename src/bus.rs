@@ -1,7 +1,7 @@
 // It's bussin my g
 
 use crate::bios::BIOS;
-use crate::dma::{Port, SyncMode, DMA, AddressMode, Direction};
+use crate::dma::{AddressMode, Direction, Port, SyncMode, DMA};
 use crate::gpu::GPU;
 use crate::map;
 use crate::map::MemoryRegion;
@@ -50,7 +50,8 @@ impl Bus {
 
             _ => Error!(
                 "Unhandled load @ 0x{:08X} (MemoryRegion::{:?})",
-                addr, region
+                addr,
+                region
             ),
         };
     }
@@ -79,9 +80,9 @@ impl Bus {
             MemoryRegion::GPU => {
                 let value = value.into();
                 match offset {
-                0 => return self.gpu.gp0(value),
-                4 => return self.gpu.gp1(value),
-                _ => return Error!("Unhandled GPU write {}: 0x{:08x}", offset, value),
+                    0x0 => return self.gpu.gp0(value),
+                    0x4 => return self.gpu.gp1(value),
+                    _ => return Error!("Unhandled GPU write {}: 0x{:08x}", offset, value),
                 }
             }
             MemoryRegion::IRQControl
@@ -110,7 +111,8 @@ impl Bus {
                     0x8 => Ok(channel.control()),
                     _ => Error!(
                         "Unsupported read from minor register {} for channel {}",
-                        minor, major
+                        minor,
+                        major
                     ),
                 }
             }
@@ -159,7 +161,8 @@ impl Bus {
             _ => {
                 return Error!(
                     "Unhandled DMA register write: 0x{:04X}, value=0x{:08X}",
-                    offset, value
+                    offset,
+                    value
                 )
             }
         };
@@ -182,7 +185,7 @@ impl Bus {
         debug!("Doing DMA block ;^) port: {:?}", port);
         let channel = self.dma.channel_mut(port);
         let increment: bool = match channel.address_mode() {
-            AddressMode::Increment =>  true,
+            AddressMode::Increment => true,
             AddressMode::Decrement => false,
         };
 
@@ -200,18 +203,18 @@ impl Bus {
                         Port::GPU => debug!("GPU data 0x{:08x}", source_word),
                         _ => return Error!("Unhandled DMA destination port {:?}", port),
                     }
-                },
+                }
                 Direction::ToDevice => {
                     let source_word = match port {
                         Port::OTC => match remaining {
                             1 => 0xff_ffff,
                             _ => addr.wrapping_sub(4) & 0x1f_ffff,
-                        }
-                        _ => return Error!("Unhandled DMA source port {:?}", port)
+                        },
+                        _ => return Error!("Unhandled DMA source port {:?}", port),
                     };
 
                     utils::store::<u32>(&mut self.ram.data, current_addr, source_word);
-                },
+                }
             }
             addr = if increment {
                 addr.wrapping_add(4)
@@ -268,7 +271,8 @@ fn expect_align(addr: u32, align: u32) -> Result<(), String> {
     if addr % align != 0 {
         Error!(
             "Unaligned memory access for address 0x{:08X}... expected alignment of {}",
-            addr, align
+            addr,
+            align
         )
     } else {
         Ok(())
