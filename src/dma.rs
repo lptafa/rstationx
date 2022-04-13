@@ -1,3 +1,4 @@
+use crate::utils::Error;
 use log::debug;
 use std::string::String;
 
@@ -119,10 +120,10 @@ impl Channel {
             1 => self.sync_mode = SyncMode::Request,
             2 => self.sync_mode = SyncMode::LinkedList,
             _ => {
-                return Err(format!(
+                return Error!(
                     "Invalid sync mode {} in set control for DMA register",
                     sync_mode
-                ))
+                )
             }
         }
 

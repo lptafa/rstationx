@@ -1,6 +1,13 @@
 // This module contains some utilities that I don't know where else to put for now.
 use std::vec::Vec;
 
+macro_rules! Error {
+    ($($x:tt)*) => {
+        Err(format!("{}: {}", std::panic::Location::caller(), format!($($x)*)))
+    };
+}
+pub(crate) use Error;
+
 pub fn load<T: TryFrom<u32>>(buf: &Vec<u8>, offset: u32) -> T {
     let offset = offset as usize;
 

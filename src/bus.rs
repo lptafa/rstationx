@@ -7,6 +7,7 @@ use crate::map;
 use crate::map::MemoryRegion;
 use crate::ram::RAM;
 use crate::utils;
+use crate::utils::Error;
 use std::string::String;
 
 pub struct Bus {
@@ -47,10 +48,10 @@ impl Bus {
             }
             MemoryRegion::GPU => Ok(self.gpu.load(offset)),
 
-            _ => Err(format!(
+            _ => Error!(
                 "Unhandled load @ 0x{:08X} (MemoryRegion::{:?})",
                 addr, region
-            )),
+            ),
         };
     }
 
@@ -60,15 +61,15 @@ impl Bus {
 
         match region {
             MemoryRegion::RAM => utils::store::<T>(&mut self.ram.data, offset, value),
-            MemoryRegion::BIOS => return Err(String::from("Illegal write to BIOS memory")),
+            MemoryRegion::BIOS => return Error!("Illegal write to BIOS memory"),
             MemoryRegion::DMA => return self.set_dma_register(offset, value.into()),
             MemoryRegion::MemControl => {
                 let value = value.into();
                 return match (offset, value) {
                     (0, 0x1f000000) => Ok(()),
-                    (0, _) => Err(format!("Bad expansion 1 base address")),
+                    (0, _) => Error!("Bad expansion 1 base address"),
                     (4, 0x1f802000) => Ok(()),
-                    (4, _) => Err(format!("Bad expansion 2 base address")),
+                    (4, _) => Error!("Bad expansion 2 base address"),
                     _ => {
                         trace!("Unhandled write to MEMCONTROL register.");
                         Ok(())
@@ -100,22 +101,22 @@ impl Bus {
                     0x0 => Ok(channel.base()),
                     0x4 => Ok(channel.block_control()),
                     0x8 => Ok(channel.control()),
-                    _ => Err(format!(
+                    _ => Error!(
                         "Unsupported read from minor register {} for channel {}",
                         minor, major
-                    )),
+                    ),
                 }
             }
             // Common DMA registers
             0x7 => match minor {
                 0x0 => Ok(self.dma.control()),
                 0x4 => Ok(self.dma.interrupt()),
-                _ => Err(format!(
+                _ => Error!(
                     "Unsupported read from minor register {} for major 0x7",
                     minor
-                )),
+                ),
             },
-            _ => Err(format!("Unhandled DMA register read: 0x{:08X}", offset)),
+            _ => Error!("Unhandled DMA register read: 0x{:08X}", offset),
         }
     }
 
@@ -130,7 +131,7 @@ impl Bus {
                     0x0 => channel.set_base(value),
                     0x4 => channel.set_block_control(value),
                     0x8 => channel.set_control(value)?,  // Might fail, so we propagate the error
-                    _ => return Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+                    _ => return Error!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value),
                 }
 
                 if channel.active() {
@@ -144,15 +145,15 @@ impl Bus {
                 match minor {
                     0x0 => self.dma.set_control(value),
                     0x4 => self.dma.set_interrupt(value),
-                    _ => return Err(format!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value)),
+                    _ => return Error!("Unsupported write to minor register 0x{:02x} for channel 0x{:02x}, value=0x{:08x}", minor, major, value),
                 }
                 None
             }
             _ => {
-                return Err(format!(
+                return Error!(
                     "Unhandled DMA register write: 0x{:04X}, value=0x{:08X}",
                     offset, value
-                ))
+                )
             }
         };
 
@@ -171,20 +172,20 @@ impl Bus {
     }
 
     fn do_dma_block(&mut self, port: Port) -> Result<(), String> {
-        Err(format!("DMA Block not implemented, port: {:?}", port))
+        Error!("DMA Block not implemented, port: {:?}", port)
     }
 
     fn do_dma_linked_list(&mut self, port: Port) -> Result<(), String> {
-        Err(format!("DMA LinkedList not implemented, port: {:?}", port))
+        Error!("DMA LinkedList not implemented, port: {:?}", port)
     }
 }
 
 fn expect_align(addr: u32, align: u32) -> Result<(), String> {
     if addr % align != 0 {
-        Err(format!(
+        Error!(
             "Unaligned memory access for address 0x{:08X}... expected alignment of {}",
             addr, align
-        ))
+        )
     } else {
         Ok(())
     }

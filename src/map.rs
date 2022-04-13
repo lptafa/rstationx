@@ -1,3 +1,5 @@
+use crate::utils::Error;
+
 // Global sizes and offsets for regions
 
 pub const BIOS_SIZE: u32 = 512 * 1024;
@@ -76,5 +78,5 @@ pub fn find_region(addr: u32) -> Result<(MemoryRegion, u32), String> {
             return Ok((*region, offset));
         }
     }
-    return Err(format!("Unknown memory region in store: 0x{:08X}", addr));
+    return Error!("Unknown memory region in store: 0x{:08X}", addr);
 }

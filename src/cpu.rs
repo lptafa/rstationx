@@ -2,6 +2,7 @@
 use crate::bus::Bus;
 use crate::instruction::{Instruction, RegisterIndex};
 use crate::map::BIOS_START;
+use crate::utils::Error;
 use log::debug;
 use std::string::String;
 
@@ -167,10 +168,10 @@ impl CPU {
                 0x00 => self.op_mfc0(instruction),
                 0x04 => self.op_mtc0(instruction),
                 0x10 => self.op_rfe(instruction),
-                _ => Err(format!(
+                _ => Error!(
                     "Unhandled cop0 instruction: 0x{:08X}",
                     instruction.cop_opcode()
-                )),
+                ),
             },
 
             0x11 => self.exception(Exception::CoprocessorError), // COP1
@@ -313,7 +314,7 @@ impl CPU {
     }
 
     fn op_cop2(&mut self, instruction: Instruction) -> Result<(), String> {
-        Err(format!("Unimplemented cop2 opcode: {}", instruction))
+        Error!("Unimplemented cop2 opcode: {}", instruction)
     }
 
     fn op_mfc0(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -324,7 +325,7 @@ impl CPU {
             12 => self.sr,
             13 => self.cause,
             14 => self.epc,
-            _ => return Err(String::from("Unhandled read from cop0 register.")),
+            _ => return Error!("Unhandled read from cop0 register."),
         };
 
         self.delayed_load_chain(cpu_r, value);
@@ -342,20 +343,20 @@ impl CPU {
         match cop_r {
             RegisterIndex(3 | 5 | 6 | 7 | 9 | 11) => {
                 if value != 0 {
-                    return Err(String::from("Unhandled write to cop0 register."));
+                    return Error!("Unhandled write to cop0 register.");
                 }
             }
             RegisterIndex(12) => self.sr = value,
             RegisterIndex(13) => self.cause = value,
             RegisterIndex(14) => self.epc = value,
-            _ => return Err(String::from("Unhandled cop0 register.")),
+            _ => return Error!("Unhandled cop0 register."),
         }
         Ok(())
     }
 
     fn op_rfe(&mut self, instruction: Instruction) -> Result<(), String> {
         if instruction.value & 0x3f != 0x10 {
-            return Err(String::from("Invalid cop0 instruction."));
+            return Error!("Invalid cop0 instruction.");
         }
 
         self.delayed_load();
@@ -937,11 +938,11 @@ impl CPU {
     }
 
     fn op_lwc2(&mut self, instruction: Instruction) -> Result<(), String> {
-        Err(format!("Unimplemented instruction: {}", instruction))
+        Error!("Unimplemented instruction: {}", instruction)
     }
 
     fn op_swc2(&mut self, instruction: Instruction) -> Result<(), String> {
-        Err(format!("Unimplemented instruction: {}", instruction))
+        Error!("Unimplemented instruction: {}", instruction)
     }
 
     fn exception(&mut self, cause: Exception) -> Result<(), String> {
@@ -1012,8 +1013,8 @@ impl CPU {
         self.dump_registers();
         eprintln!("----------------------------------------------------------------");
         eprintln!("[-] Instruction: {}", instruction);
-        eprintln!("[-] NOTE: {}", message);
         eprintln!("[-] Executed {} instructions", self.counter);
+        eprintln!("{}", message);
         eprintln!("----------------------------------------------------------------");
         panic!();
     }
