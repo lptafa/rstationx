@@ -185,6 +185,7 @@ impl GPU {
             0xe3 => self.gp0_drawing_area_top_left(val),
             0xe4 => self.gp0_drawing_area_bottom_right(val),
             0xe5 => self.gp0_drawing_offset(val),
+            0xe6 => self.gp0_mask_bit_setting(val),
             _ => Error!("Unhandled GP0 command 0x{:08x}", val),
         }
     }
@@ -244,12 +245,21 @@ impl GPU {
         Ok(())
     }
 
+    fn gp0_mask_bit_setting(&mut self, val: u32) -> Result<(), String> {
+        self.force_set_mask_bit = (val & 1) != 0;
+        self.preserve_masked_pixels = (val & 2) != 0;
+        Ok(())
+    }
+
     pub fn gp1(&mut self, val: u32) -> Result<(), String> {
         let opcode = (val >> 24) & 0xff;
 
         match opcode {
             0x00 => self.gp1_reset(val),
             0x04 => self.gp1_dma_direction(val),
+            0x05 => self.gp1_display_vram_start(val),
+            0x06 => self.gp1_display_horizontal_range(val),
+            0x07 => self.gp1_display_vertical_range(val),
             0x08 => self.gp1_display_mode(val),
             _ => Error!("Unhandled GP1 command 0x{:08x}", val),
         }
@@ -292,6 +302,39 @@ impl GPU {
         Ok(())
     }
 
+    fn gp1_dma_direction(&mut self, val: u32) -> Result<(), String> {
+        self.dma_direction = match val & 3 {
+            0 => DMADirection::Off,
+            1 => DMADirection::FIFO,
+            2 => DMADirection::CPU2GP0,
+            3 => DMADirection::VRAM2CPU,
+            _ => unreachable!(),
+        };
+        Ok(())
+    }
+
+    fn gp1_display_vram_start(&mut self, val: u32) -> Result<(), String> {
+        let x = (val & 0x3fe) as u16;
+        let y = ((val >> 10) & 0x1ff) as u16;
+
+        self.display_vram_start = (x, y);
+        Ok(())
+    }
+
+    fn gp1_display_horizontal_range(&mut self, val: u32) -> Result<(), String> {
+        let start = (val & 0xfff) as u16;
+        let end = ((val >> 12) & 0xfff) as u16;
+        self.display_horiz_range = (start, end);
+        Ok(())
+    }
+
+    fn gp1_display_vertical_range(&mut self, val: u32) -> Result<(), String> {
+        let start = (val & 0x3ff) as u16;
+        let end = ((val >> 10) & 0x3ff) as u16;
+        self.display_line_range = (start, end);
+        Ok(())
+    }
+
     fn gp1_display_mode(&mut self, val: u32) -> Result<(), String> {
         let hr1 = (val & 3) as u8;
         let hr2 = ((val >> 6) & 1) as u8;
@@ -318,17 +361,6 @@ impl GPU {
         if val & 0x80 != 0 {
             return Error!("Unsupported display mode 0x{:08x}", val);
         }
-        Ok(())
-    }
-
-    fn gp1_dma_direction(&mut self, val: u32) -> Result<(), String> {
-        self.dma_direction = match val & 3 {
-            0 => DMADirection::Off,
-            1 => DMADirection::FIFO,
-            2 => DMADirection::CPU2GP0,
-            3 => DMADirection::VRAM2CPU,
-            _ => unreachable!(),
-        };
         Ok(())
     }
 
