@@ -76,13 +76,19 @@ impl Bus {
                     }
                 };
             }
+            MemoryRegion::GPU => {
+                let value = value.into();
+                match offset {
+                0 => return self.gpu.gp0(value),
+                _ => return Error!("Unhandled GPU write {}: 0x{:08x}", offset, value),
+                }
+            }
             MemoryRegion::IRQControl
             | MemoryRegion::Expansion1
             | MemoryRegion::Expansion2
             | MemoryRegion::RAMSize
             | MemoryRegion::CacheControl
             | MemoryRegion::SPU
-            | MemoryRegion::GPU
             | MemoryRegion::Timers => {
                 trace!("Ignoring write to {:?} range: 0x{:08X}", region, offset);
             }
