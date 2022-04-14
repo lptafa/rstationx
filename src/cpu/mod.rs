@@ -1,7 +1,8 @@
-// wagwan my g
+mod instruction;
+
 use crate::memory::Bus;
 use crate::memory::BIOS_START;
-use crate::instruction::{Instruction, RegisterIndex};
+use self::instruction::{Instruction, RegisterIndex};
 use crate::utils::Error;
 use log::debug;
 use std::string::String;

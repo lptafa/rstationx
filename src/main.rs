@@ -2,7 +2,6 @@
 mod bios;
 mod cpu;
 mod gpu;
-mod instruction;
 mod utils;
 mod memory;
 
