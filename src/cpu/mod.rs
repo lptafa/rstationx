@@ -1,8 +1,8 @@
 mod instruction;
 
+use self::instruction::{Instruction, RegisterIndex};
 use crate::memory::Bus;
 use crate::memory::BIOS_START;
-use self::instruction::{Instruction, RegisterIndex};
 use crate::utils::Error;
 use log::debug;
 use std::string::String;
@@ -144,7 +144,7 @@ impl CPU {
                     0x2A => self.op_slt(instruction),
                     0x2B => self.op_sltu(instruction),
 
-                    _ => self.exception(Exception::IllegalInstruction),
+                    _ => Ok(self.exception(Exception::IllegalInstruction)),
                 }
             }
 
@@ -175,9 +175,9 @@ impl CPU {
                 ),
             },
 
-            0x11 => self.exception(Exception::CoprocessorError), // COP1
+            0x11 => Ok(self.exception(Exception::CoprocessorError)), // COP1
             0x12 => self.op_cop2(instruction),
-            0x13 => self.exception(Exception::CoprocessorError), // COP3
+            0x13 => Ok(self.exception(Exception::CoprocessorError)), // COP3
 
             0x20 => self.op_lb(instruction),
             0x21 => self.op_lh(instruction),
@@ -193,17 +193,17 @@ impl CPU {
             0x2B => self.op_sw(instruction),
             0x2E => self.op_swr(instruction),
 
-            0x30 => self.exception(Exception::IllegalInstruction), // LWC0
-            0x31 => self.exception(Exception::IllegalInstruction), // LWC1
-            0x32 => self.op_lwc2(instruction),                     // LWC2
-            0x33 => self.exception(Exception::IllegalInstruction), // LWC3
+            0x30 => Ok(self.exception(Exception::IllegalInstruction)), // LWC0
+            0x31 => Ok(self.exception(Exception::IllegalInstruction)), // LWC1
+            0x32 => self.op_lwc2(instruction),                         // LWC2
+            0x33 => Ok(self.exception(Exception::IllegalInstruction)), // LWC3
 
-            0x38 => self.exception(Exception::IllegalInstruction), // SWC0
-            0x39 => self.exception(Exception::IllegalInstruction), // SWC1
-            0x3A => self.op_swc2(instruction),                     // SWC2
-            0x3B => self.exception(Exception::IllegalInstruction), // SWC3
+            0x38 => Ok(self.exception(Exception::IllegalInstruction)), // SWC0
+            0x39 => Ok(self.exception(Exception::IllegalInstruction)), // SWC1
+            0x3A => self.op_swc2(instruction),                         // SWC2
+            0x3B => Ok(self.exception(Exception::IllegalInstruction)), // SWC3
 
-            _ => self.exception(Exception::IllegalInstruction),
+            _ => Ok(self.exception(Exception::IllegalInstruction)),
         };
     }
 
@@ -453,11 +453,11 @@ impl CPU {
     }
 
     fn op_syscall(&mut self, _instruction: Instruction) -> Result<(), String> {
-        self.exception(Exception::Syscall)
+        Ok(self.exception(Exception::Syscall))
     }
 
     fn op_break(&mut self, _instruction: Instruction) -> Result<(), String> {
-        self.exception(Exception::Break)
+        Ok(self.exception(Exception::Break))
     }
 
     fn op_mfhi(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -561,10 +561,11 @@ impl CPU {
 
         self.delayed_load();
 
-        return match left.checked_add(right) {
-            Some(value) => Ok(self.set_register(target, value as u32)),
+        match left.checked_add(right) {
+            Some(value) => self.set_register(target, value as u32),
             None => self.exception(Exception::Overflow),
         };
+        Ok(())
     }
 
     fn op_addu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -584,10 +585,11 @@ impl CPU {
 
         self.delayed_load();
 
-        return match left.checked_sub(right) {
-            Some(value) => Ok(self.set_register(target, value as u32)),
+        match left.checked_sub(right) {
+            Some(value) => self.set_register(target, value as u32),
             None => self.exception(Exception::Overflow),
         };
+        Ok(())
     }
 
     fn op_subu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -647,10 +649,11 @@ impl CPU {
 
         self.delayed_load();
 
-        return match source.checked_add(imm) {
-            Some(value) => Ok(self.set_register(target, value as u32)),
+        match source.checked_add(imm) {
+            Some(value) => self.set_register(target, value as u32),
             None => self.exception(Exception::Overflow),
         };
+        Ok(())
     }
 
     fn op_addiu(&mut self, instruction: Instruction) -> Result<(), String> {
@@ -746,7 +749,7 @@ impl CPU {
         if offset % 2 == 0 {
             self.store::<u16>(base.wrapping_add(offset), value as u16)
         } else {
-            self.exception(Exception::AddressErrorStore)
+            Ok(self.exception(Exception::AddressErrorStore))
         }
     }
 
@@ -762,7 +765,7 @@ impl CPU {
         if offset % 4 == 0 {
             self.store::<u32>(base.wrapping_add(offset), value)
         } else {
-            self.exception(Exception::AddressErrorStore)
+            Ok(self.exception(Exception::AddressErrorStore))
         }
     }
 
@@ -836,7 +839,7 @@ impl CPU {
             self.delayed_load_chain(target_index, value as u32);
             Ok(())
         } else {
-            self.exception(Exception::AddressErrorLoad)
+            Ok(self.exception(Exception::AddressErrorLoad))
         }
     }
 
@@ -852,7 +855,7 @@ impl CPU {
             self.delayed_load_chain(target_index, value as u32);
             Ok(())
         } else {
-            self.exception(Exception::AddressErrorLoad)
+            Ok(self.exception(Exception::AddressErrorLoad))
         }
     }
 
@@ -946,7 +949,7 @@ impl CPU {
         Error!("Unimplemented instruction: {}", instruction)
     }
 
-    fn exception(&mut self, cause: Exception) -> Result<(), String> {
+    fn exception(&mut self, cause: Exception) {
         self.delayed_load();
 
         let handler = match self.sr & (1 << 22) != 0 {
@@ -973,15 +976,13 @@ impl CPU {
 
         self.pc = handler;
         self.next_pc = self.pc.wrapping_add(4);
-
-        Ok(())
     }
 
     pub fn exec_next_instruction(&mut self) {
         self.current_pc = self.pc;
 
         if self.current_pc % 4 != 0 {
-            self.exception(Exception::AddressErrorLoad).unwrap();
+            self.exception(Exception::AddressErrorLoad);
             return;
         }
 

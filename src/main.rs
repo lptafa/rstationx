@@ -2,8 +2,8 @@
 mod bios;
 mod cpu;
 mod gpu;
-mod utils;
 mod memory;
+mod utils;
 
 #[macro_use]
 extern crate log;

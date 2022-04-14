@@ -5,10 +5,10 @@ use crate::gpu::GPU;
 use crate::utils;
 use crate::utils::Error;
 
-use super::map::MemoryRegion;
-use super::map;
 use super::channel::{AddressMode, Direction, SyncMode};
 use super::dma::{Port, DMA};
+use super::map;
+use super::map::MemoryRegion;
 use super::ram::RAM;
 
 use std::string::String;
@@ -36,8 +36,8 @@ impl Bus {
         let (region, offset) = map::find_region(addr)?;
 
         return match region {
-            MemoryRegion::BIOS => Ok(utils::load::<T>(&self.bios.data, offset)),
-            MemoryRegion::RAM => Ok(utils::load::<T>(&self.ram.data, offset)),
+            MemoryRegion::BIOS => Ok(self.bios.load(offset)),
+            MemoryRegion::RAM => Ok(self.ram.load(offset)),
             // FIXME: This is ugly, maybe find a nice way to convert the error from
             //        T.try_into() into our own error type (String)?
             MemoryRegion::DMA => Ok(utils::to_t(self.dma_register(offset)?)),
@@ -64,7 +64,7 @@ impl Bus {
         let (region, offset) = map::find_region(addr)?;
 
         match region {
-            MemoryRegion::RAM => utils::store::<T>(&mut self.ram.data, offset, value),
+            MemoryRegion::RAM => self.ram.store(offset, value),
             MemoryRegion::BIOS => return Error!("Illegal write to BIOS memory"),
             MemoryRegion::DMA => return self.set_dma_register(offset, value.into()),
             MemoryRegion::MemControl => {
@@ -201,7 +201,7 @@ impl Bus {
 
             match channel.direction() {
                 Direction::FromDevice => {
-                    let source_word = utils::load::<u32>(&self.ram.data, current_addr);
+                    let source_word: u32 = self.ram.load(current_addr);
                     match port {
                         Port::GPU => debug!("GPU data 0x{:08x}", source_word),
                         _ => return Error!("Unhandled DMA destination port {:?}", port),
@@ -244,17 +244,12 @@ impl Bus {
         }
 
         loop {
-            let header = utils::load::<u32>(&self.ram.data, addr);
-
+            let header: u32 = self.ram.load(addr);
             let mut remaining = header >> 24;
 
             while remaining > 0 {
                 addr = (addr + 4) & 0x1f_fffc;
-
-                let command = utils::load::<u32>(&self.ram.data, addr);
-
-                self.gpu.gp0(command)?;
-
+                self.gpu.gp0(self.ram.load(addr))?;
                 remaining -= 1;
             }
 

@@ -1,4 +1,5 @@
 use crate::memory::BIOS_SIZE;
+use crate::utils;
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
@@ -25,5 +26,10 @@ impl BIOS {
                 "Invalid BIOS file.",
             ))
         }
+    }
+
+    #[inline]
+    pub fn load<T: TryFrom<u32>>(&self, addr: u32) -> T {
+        utils::load(&self.data, addr)
     }
 }
