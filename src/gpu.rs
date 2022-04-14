@@ -2,6 +2,8 @@ use crate::utils;
 use crate::utils::Error;
 use std::string::String;
 
+type Handler = fn(&mut GPU) -> Result<(), String>;
+
 #[derive(Clone, Copy, Debug)]
 enum TextureDepth {
     T4 = 0,
@@ -91,6 +93,10 @@ pub struct GPU {
     display_vram_start: (u16, u16),
     display_horiz_range: (u16, u16),
     display_line_range: (u16, u16),
+
+    gp0_command: CommandBuffer,
+    gp0_command_remaining: u32,
+    gp0_command_method: Handler,
 }
 
 impl GPU {
@@ -129,6 +135,10 @@ impl GPU {
             display_vram_start: (0, 0),
             display_horiz_range: (0, 0),
             display_line_range: (0, 0),
+
+            gp0_command: CommandBuffer::new(),
+            gp0_command_remaining: 0,
+            gp0_command_method: GPU::gp0_nop,
         }
     }
 
@@ -176,21 +186,44 @@ impl GPU {
     }
 
     pub fn gp0(&mut self, val: u32) -> Result<(), String> {
-        let opcode = (val >> 24) & 0xff;
+        if self.gp0_command_remaining == 0 {
+            let opcode = (val >> 24) & 0xff;
 
-        match opcode {
-            0x00 => Ok(()),
-            0xe1 => self.gp0_draw_mode(val),
-            0xe2 => self.gp0_texture_window(val),
-            0xe3 => self.gp0_drawing_area_top_left(val),
-            0xe4 => self.gp0_drawing_area_bottom_right(val),
-            0xe5 => self.gp0_drawing_offset(val),
-            0xe6 => self.gp0_mask_bit_setting(val),
-            _ => Error!("Unhandled GP0 command 0x{:08x}", val),
+            let (len, method): (u32, Handler) = match opcode {
+                0x00 => (1, GPU::gp0_nop),
+                0x28 => (5, GPU::gp0_quad_mono_opaque),
+                0xe1 => (1, GPU::gp0_draw_mode),
+                0xe2 => (1, GPU::gp0_texture_window),
+                0xe3 => (1, GPU::gp0_drawing_area_top_left),
+                0xe4 => (1, GPU::gp0_drawing_area_bottom_right),
+                0xe5 => (1, GPU::gp0_drawing_offset),
+                0xe6 => (1, GPU::gp0_mask_bit_setting),
+                _ => return Error!("Unhandled GP0 command 0x{:08x}", val),
+            };
+            self.gp0_command_remaining = len;
+            self.gp0_command_method = method;
+
+            self.gp0_command.clear();
         }
+        self.gp0_command.push(val);
+        self.gp0_command_remaining -= 1;
+
+        if self.gp0_command_remaining == 0 {
+            return (self.gp0_command_method)(self);
+        }
+        Ok(())
     }
 
-    fn gp0_draw_mode(&mut self, val: u32) -> Result<(), String> {
+    pub fn gp0_nop(&mut self) -> Result<(), String> { Ok(()) }
+
+    pub fn gp0_quad_mono_opaque(&mut self) -> Result<(), String> {
+        println!("Draw quad");
+        Ok(())
+    }
+
+    fn gp0_draw_mode(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
+
         self.texture_base.0 = (val & 0xf) as u8;
         self.texture_base.1 = ((val >> 4) & 1) as u8;
         self.semi_transparency = ((val >> 5) & 3) as u8;
@@ -211,7 +244,8 @@ impl GPU {
         Ok(())
     }
 
-    fn gp0_texture_window(&mut self, val: u32) -> Result<(), String> {
+    fn gp0_texture_window(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
         let x_mask = (val & 0x1f) as u8;
         let y_mask = ((val >> 5) & 0x1f) as u8;
         self.texture_window_mask = (x_mask, y_mask);
@@ -222,19 +256,22 @@ impl GPU {
         Ok(())
     }
 
-    fn gp0_drawing_area_top_left(&mut self, val: u32) -> Result<(), String> {
+    fn gp0_drawing_area_top_left(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
         self.drawing_area.top = ((val >> 10) & 0x3ff) as u16;
         self.drawing_area.left = (val & 0x3ff) as u16;
         Ok(())
     }
 
-    fn gp0_drawing_area_bottom_right(&mut self, val: u32) -> Result<(), String> {
+    fn gp0_drawing_area_bottom_right(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
         self.drawing_area.top = ((val >> 10) & 0x3ff) as u16;
         self.drawing_area.left = (val & 0x3ff) as u16;
         Ok(())
     }
 
-    fn gp0_drawing_offset(&mut self, val: u32) -> Result<(), String> {
+    fn gp0_drawing_offset(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
         let x = (val & 0x7ff) as u16;
         let y = ((val >> 11) & 0x7ff) as u16;
 
@@ -245,7 +282,8 @@ impl GPU {
         Ok(())
     }
 
-    fn gp0_mask_bit_setting(&mut self, val: u32) -> Result<(), String> {
+    fn gp0_mask_bit_setting(&mut self) -> Result<(), String> {
+        let val = self.gp0_command[0];
         self.force_set_mask_bit = (val & 1) != 0;
         self.preserve_masked_pixels = (val & 2) != 0;
         Ok(())
@@ -366,5 +404,45 @@ impl GPU {
 
     pub fn read(&self) -> u32 {
         0
+    }
+}
+
+struct CommandBuffer {
+    data: [u32; 12],
+    len: u8,
+}
+
+impl CommandBuffer {
+    fn new() -> Self {
+        Self {
+            data: [0; 12],
+            len: 0,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    fn push(&mut self, word: u32) {
+        if self.len >= 12 {
+            panic!("Command command buffer index out of range");
+        }
+        self.data[self.len as usize] = word;
+        self.len += 1;
+    }
+}
+
+impl ::std::ops::Index<usize> for CommandBuffer {
+    type Output = u32;
+
+    fn index<'a>(&'a self, index: usize) -> &'a u32 {
+        if index >= self.len as usize {
+            panic!(
+                "Command buffer index out of range: {:?} ({:?})",
+                index, self.len
+            );
+        }
+        &self.data[index]
     }
 }
