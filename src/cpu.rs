@@ -1,7 +1,7 @@
 // wagwan my g
-use crate::bus::Bus;
+use crate::memory::Bus;
+use crate::memory::BIOS_START;
 use crate::instruction::{Instruction, RegisterIndex};
-use crate::map::BIOS_START;
 use crate::utils::Error;
 use log::debug;
 use std::string::String;

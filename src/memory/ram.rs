@@ -1,4 +1,4 @@
-use crate::map::RAM_SIZE;
+use super::map::RAM_SIZE;
 
 pub struct RAM {
     pub data: Vec<u8>,

@@ -1,4 +1,4 @@
-use crate::map::BIOS_SIZE;
+use crate::memory::BIOS_SIZE;
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::Path;

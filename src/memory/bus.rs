@@ -1,13 +1,16 @@
 // It's bussin my g
 
 use crate::bios::BIOS;
-use crate::dma::{AddressMode, Direction, Port, SyncMode, DMA};
 use crate::gpu::GPU;
-use crate::map;
-use crate::map::MemoryRegion;
-use crate::ram::RAM;
 use crate::utils;
 use crate::utils::Error;
+
+use super::map::MemoryRegion;
+use super::map;
+use super::channel::{AddressMode, Direction, SyncMode};
+use super::dma::{Port, DMA};
+use super::ram::RAM;
+
 use std::string::String;
 
 pub struct Bus {
