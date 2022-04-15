@@ -64,6 +64,11 @@ struct DrawingArea {
     bottom: u16,
 }
 
+enum GP0Mode {
+    Command,
+    Imageload,
+}
+
 pub struct GPU {
     semi_transparency: u8,
     texture_base: (u8, u8),
@@ -97,6 +102,8 @@ pub struct GPU {
     gp0_command: CommandBuffer,
     gp0_command_remaining: u32,
     gp0_command_method: Handler,
+
+    gp0_mode: GP0Mode,
 }
 
 impl GPU {
@@ -139,6 +146,8 @@ impl GPU {
             gp0_command: CommandBuffer::new(),
             gp0_command_remaining: 0,
             gp0_command_method: GPU::gp0_nop,
+
+            gp0_mode: GP0Mode::Command,
         }
     }
 
@@ -155,7 +164,7 @@ impl GPU {
             | (self.field as u32) << 13
             | (self.texture_disable as u32) << 15
             | self.hres.into_status()
-            // | (self.vres as u32) << 19
+            // | (self.vres as u32) << 19 //FIXME: This is the interlacing bit that needs to be implemented.
             | (self.vmode as u32) << 20
             | (self.display_depth as u32) << 21
             | (self.interlacing as u32) << 22
@@ -194,6 +203,11 @@ impl GPU {
                 0x00 => (1, GPU::gp0_nop),
                 0x01 => (1, GPU::gp0_clear_cache),
                 0x28 => (5, GPU::gp0_quad_mono_opaque),
+                0x2c => (9, GPU::gp0_quad_texture_blend_opaque),
+                0x30 => (6, GPU::gp0_triangle_shaded_opaque),
+                0x38 => (8, GPU::gp0_quad_shaded_opaque),
+                0xa0 => (3, GPU::gp0_image_load),
+                0xc0 => (3, GPU::gp0_image_store),
                 0xe1 => (1, GPU::gp0_draw_mode),
                 0xe2 => (1, GPU::gp0_texture_window),
                 0xe3 => (1, GPU::gp0_drawing_area_top_left),
@@ -207,16 +221,31 @@ impl GPU {
 
             self.gp0_command.clear();
         }
-        self.gp0_command.push(val);
+
         self.gp0_command_remaining -= 1;
 
-        if self.gp0_command_remaining == 0 {
-            return (self.gp0_command_method)(self);
+        match self.gp0_mode {
+            GP0Mode::Command => {
+                self.gp0_command.push(val);
+
+                if self.gp0_command_remaining == 0 {
+                    return (self.gp0_command_method)(self);
+                }
+            }
+            GP0Mode::Imageload => {
+                // TODO: copy pixel data to video ram
+
+                if self.gp0_command_remaining == 0 {
+                    self.gp0_mode = GP0Mode::Command;
+                }
+            }
         }
         Ok(())
     }
 
-    pub fn gp0_nop(&mut self) -> Result<(), String> { Ok(()) }
+    pub fn gp0_nop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 
     pub fn gp0_clear_cache(&mut self) -> Result<(), String> {
         debug!("Unimplemented gp0 clear cache command");
@@ -224,8 +253,49 @@ impl GPU {
     }
 
     pub fn gp0_quad_mono_opaque(&mut self) -> Result<(), String> {
-        println!("Draw quad");
+        debug!("Draw quad");
         Ok(())
+    }
+
+    pub fn gp0_quad_texture_blend_opaque(&mut self) -> Result<(), String> {
+        debug!("Draw quad");
+        Ok(())
+    }
+
+    pub fn gp0_triangle_shaded_opaque(&mut self) -> Result<(), String> {
+        debug!("Draw shaded quad");
+        Ok(())
+    }
+
+    pub fn gp0_quad_shaded_opaque(&mut self) -> Result<(), String> {
+        debug!("Draw shaded quad");
+        Ok(())
+    }
+
+    pub fn gp0_image_load(&mut self) -> Result<(), String> {
+        let resolution = self.gp0_command[2];
+
+        let width = resolution & 0xffff;
+        let height = resolution >> 16;
+
+        let image_size = width * height;
+        let image_size = (image_size + 1) & !1;
+
+        self.gp0_command_remaining = image_size / 2;
+        self.gp0_mode = GP0Mode::Imageload;
+
+        Ok(())
+    }
+
+    pub fn gp0_image_store(&mut self) -> Result<(), String> {
+        let resolution = self.gp0_command[2];
+
+        let width = resolution & 0xffff;
+        let height = resolution >> 16;
+
+        debug!("Unhandled image store {}x{}", width, height);
+        Ok(())
+
     }
 
     fn gp0_draw_mode(&mut self) -> Result<(), String> {
@@ -306,6 +376,9 @@ impl GPU {
 
         match opcode {
             0x00 => self.gp1_reset(val),
+            0x01 => self.gp1_reset_command_buf(val),
+            0x02 => self.gp1_ack_irq(val),
+            0x03 => self.gp1_display_enable(val),
             0x04 => self.gp1_dma_direction(val),
             0x05 => self.gp1_display_vram_start(val),
             0x06 => self.gp1_display_horizontal_range(val),
@@ -315,7 +388,9 @@ impl GPU {
         }
     }
 
-    fn gp1_reset(&mut self, _: u32) -> Result<(), String> {
+    fn gp1_reset(&mut self, val: u32) -> Result<(), String> {
+        self.gp1_reset_command_buf(val)?;
+
         self.interrupt = false;
 
         self.texture_base = (0, 0);
@@ -349,6 +424,24 @@ impl GPU {
         self.display_horiz_range = (0x200, 0xc00);
         self.display_line_range = (0x10, 0x100);
         self.display_depth = DisplayDepth::D15;
+        Ok(())
+    }
+
+    fn gp1_reset_command_buf(&mut self, _: u32) -> Result<(), String> {
+        self.gp0_command.clear();
+        self.gp0_command_remaining = 0;
+        self.gp0_mode = GP0Mode::Command;
+        // TODO: Should clear the command FIFO
+        Ok(())
+    }
+
+    fn gp1_ack_irq(&mut self, _: u32) -> Result<(), String> {
+        self.interrupt = false;
+        Ok(())
+    }
+
+    fn gp1_display_enable(&mut self, val: u32) -> Result<(), String> {
+        self.display_disabled = val & 1 != 0;
         Ok(())
     }
 

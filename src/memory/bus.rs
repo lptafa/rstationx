@@ -203,7 +203,7 @@ impl Bus {
                 Direction::FromDevice => {
                     let source_word: u32 = self.ram.load(current_addr);
                     match port {
-                        Port::GPU => debug!("GPU data 0x{:08x}", source_word),
+                        Port::GPU => self.gpu.gp0(source_word)?,
                         _ => return Error!("Unhandled DMA destination port {:?}", port),
                     }
                 }
