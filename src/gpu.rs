@@ -179,8 +179,9 @@ impl GPU {
 
     pub fn load<T: TryFrom<u32>>(&self, offset: u32) -> T {
         let value: u32 = match offset {
-            4 => 0x1c000000,
-            _ => 0,
+            0 => self.read(),
+            4 => self.status(),
+            _ => unreachable!(),
         };
         utils::to_t(value)
     }
