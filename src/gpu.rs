@@ -155,7 +155,7 @@ impl GPU {
             | (self.field as u32) << 13
             | (self.texture_disable as u32) << 15
             | self.hres.into_status()
-            | (self.vres as u32) << 19
+            // | (self.vres as u32) << 19
             | (self.vmode as u32) << 20
             | (self.display_depth as u32) << 21
             | (self.interlacing as u32) << 22
@@ -192,6 +192,7 @@ impl GPU {
 
             let (len, method): (u32, Handler) = match opcode {
                 0x00 => (1, GPU::gp0_nop),
+                0x01 => (1, GPU::gp0_clear_cache),
                 0x28 => (5, GPU::gp0_quad_mono_opaque),
                 0xe1 => (1, GPU::gp0_draw_mode),
                 0xe2 => (1, GPU::gp0_texture_window),
@@ -216,6 +217,11 @@ impl GPU {
     }
 
     pub fn gp0_nop(&mut self) -> Result<(), String> { Ok(()) }
+
+    pub fn gp0_clear_cache(&mut self) -> Result<(), String> {
+        debug!("Unimplemented gp0 clear cache command");
+        Ok(())
+    }
 
     pub fn gp0_quad_mono_opaque(&mut self) -> Result<(), String> {
         println!("Draw quad");
