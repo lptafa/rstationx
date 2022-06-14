@@ -1,5 +1,7 @@
 use crate::utils;
 use crate::utils::Error;
+use crate::renderer::Renderer;
+use crate::renderer::gl_renderer::GLRenderer;
 use std::string::String;
 
 type Handler = fn(&mut GPU) -> Result<(), String>;
@@ -70,6 +72,8 @@ enum GP0Mode {
 }
 
 pub struct GPU {
+    renderer: GLRenderer,
+
     semi_transparency: u8,
     texture_base: (u8, u8),
     texture_depth: TextureDepth,
@@ -109,6 +113,8 @@ pub struct GPU {
 impl GPU {
     pub fn new() -> GPU {
         GPU {
+            renderer: GLRenderer::new(),
+
             semi_transparency: 0,
             texture_base: (0, 0),
             texture_depth: TextureDepth::T4,

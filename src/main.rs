@@ -4,10 +4,12 @@ mod cpu;
 mod gpu;
 mod memory;
 mod utils;
+mod renderer;
 
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate glium;
 
 fn main() {
     env_logger::Builder::from_default_env()

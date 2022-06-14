@@ -9,3 +9,4 @@ license = "GPLv3"
 [dependencies]
 log = ">= 0.4"
 env_logger = ">= 0.9"
+glium = ">= 0.31"
