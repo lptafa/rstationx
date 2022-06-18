@@ -1,6 +1,6 @@
 use crate::utils;
 use crate::utils::Error;
-use crate::renderer::Renderer;
+use crate::renderer::{Renderer, Position, Color};
 use crate::renderer::gl_renderer::GLRenderer;
 use std::string::String;
 
@@ -269,7 +269,20 @@ impl GPU {
     }
 
     pub fn gp0_triangle_shaded_opaque(&mut self) -> Result<(), String> {
-        debug!("Draw shaded quad");
+        let pos = [
+            Position::from_gp0(self.gp0_command[1]),
+            Position::from_gp0(self.gp0_command[3]),
+            Position::from_gp0(self.gp0_command[5]),
+        ];
+
+        let col = [
+            Color::from_gp0(self.gp0_command[0]),
+            Color::from_gp0(self.gp0_command[2]),
+            Color::from_gp0(self.gp0_command[4]),
+        ];
+
+        self.renderer.push_triangle(pos, col);
+
         Ok(())
     }
 
