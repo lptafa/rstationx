@@ -335,6 +335,7 @@ impl<R: Renderer> GPU<R> {
         ];
 
         self.renderer.push_triangle(positions, colors);
+
         Ok(())
     }
 
