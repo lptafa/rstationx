@@ -3,17 +3,18 @@ mod instruction;
 use self::instruction::{Instruction, RegisterIndex};
 use crate::memory::Bus;
 use crate::memory::BIOS_START;
+use crate::renderer::Renderer;
 use crate::utils::Error;
 use log::debug;
 use std::string::String;
 
-pub struct CPU {
+pub struct CPU<R: Renderer> {
     pc: u32,
     current_pc: u32,
     next_pc: u32,
     counter: u32,
     pending_load: (RegisterIndex, u32),
-    bus: Bus,
+    bus: Bus<R>,
 
     sr: u32,
     hi: u32,
@@ -36,12 +37,12 @@ macro_rules! ignore_cache {
     };
 }
 
-impl CPU {
-    pub fn new(bus: Bus) -> CPU {
+impl<R: Renderer> CPU<R> {
+    pub fn new(bus: Bus<R>) -> Self {
         let mut registers = [0xcafebabe; 32];
         registers[0] = 0;
 
-        CPU {
+        Self {
             pc: BIOS_START,
             current_pc: BIOS_START,
             next_pc: BIOS_START.wrapping_add(4),
