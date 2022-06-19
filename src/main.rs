@@ -13,6 +13,8 @@ extern crate env_logger;
 extern crate gl;
 extern crate sdl2;
 
+use std::os;
+
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
@@ -22,7 +24,21 @@ fn main() {
         .init();
 
     let sdl_context = sdl2::init().unwrap();
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    async fn watch_events(mut event_pump: sdl2::EventPump) {
+        loop {
+            for e in event_pump.poll_iter() {
+                match e {
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => std::process::exit(0),
+                    Event::Quit { .. } => std::process::exit(0),
+                    _ => (),
+                }
+            }
+        }
+    }
+    let _ = watch_events(sdl_context.event_pump().unwrap());
 
     let renderer = glrenderer::GLRenderer::new(sdl_context);
 
@@ -36,19 +52,6 @@ fn main() {
 
     info!("Starting emulation loop...");
     loop {
-        for _ in 0..1_000_000 {
-            cpu.exec_next_instruction();
-        }
-
-        for e in event_pump.poll_iter() {
-            match e {
-                Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => return,
-                Event::Quit { .. } => return,
-                _ => (),
-            }
-        }
+        cpu.exec_next_instruction();
     }
 }

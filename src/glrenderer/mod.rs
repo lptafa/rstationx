@@ -36,7 +36,7 @@ impl GLRenderer {
         gl_attr.set_context_version(3, 3);
 
         let window = video_subsystem
-            .window("RStationX", 1024, 512)
+            .window("RStationX", 2048, 1024)
             .opengl()
             .position_centered()
             .build()

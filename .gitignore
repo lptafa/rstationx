@@ -1,5 +1,5 @@
 target/
-bios/
+bios/bios
 .DS_Store
 *.dSYM
 *.out
