@@ -3,3 +3,5 @@ bios/
 .DS_Store
 *.dSYM
 *.out
+
+Cargo.lock
