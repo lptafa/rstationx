@@ -4,19 +4,16 @@ use crate::renderer::{Color, Position};
 use glium::glutin::dpi::LogicalSize;
 use glium::glutin::event_loop::EventLoop;
 use glium::index::PrimitiveType;
-use glium::{glutin, program, uniform, Display, IndexBuffer, Program, Surface, VertexBuffer, implement_vertex};
+use glium::{glutin, program, uniform, Display, Program, Surface, implement_vertex};
 use glutin::window::Window;
-
-use super::Vertex;
 
 pub struct GLRenderer {
     display: Display,
     program: Program,
 }
 
-impl Renderer for GLRenderer {
-    fn new() -> Self {
-        let event_loop = glutin::event_loop::EventLoop::new();
+impl GLRenderer {
+    pub fn new(event_loop: &EventLoop<()>) -> Self {
         let mut wb =
             glutin::window::WindowBuilder::new().with_inner_size(LogicalSize::new(1024, 512));
         wb.window.title = String::from("RStationX");
@@ -64,7 +61,9 @@ impl Renderer for GLRenderer {
         .unwrap();
         GLRenderer { display, program }
     }
+}
 
+impl Renderer for GLRenderer {
     fn push_triangle(&mut self, positions: [Position; 3], colors: [Color; 3]) {
         let draw = move || {
             // building the uniforms
@@ -124,6 +123,4 @@ impl Renderer for GLRenderer {
         };
         draw();
     }
-
-    fn start() {}
 }

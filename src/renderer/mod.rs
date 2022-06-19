@@ -1,18 +1,7 @@
-use glium::buffer;
-
 pub mod gl_renderer;
 
 pub trait Renderer {
-    fn new() -> Self; // Setup and create a window
-    fn start();
-
     fn push_triangle(&mut self, positions: [Position; 3], colors: [Color; 3]);
-}
-
-#[derive(Clone, Copy)]
-pub struct Vertex {
-    position: Position,
-    color: Color
 }
 
 #[derive(Clone, Copy)]

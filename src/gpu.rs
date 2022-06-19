@@ -1,7 +1,6 @@
 use crate::utils;
 use crate::utils::Error;
-use crate::renderer::{Renderer, Position, Color};
-use crate::renderer::gl_renderer::GLRenderer;
+use crate::renderer::{Renderer, Position, Color, gl_renderer::GLRenderer};
 use std::string::String;
 
 type Handler = fn(&mut GPU) -> Result<(), String>;
@@ -111,9 +110,9 @@ pub struct GPU {
 }
 
 impl GPU {
-    pub fn new() -> GPU {
+    pub fn new(renderer: GLRenderer) -> GPU {
         GPU {
-            renderer: GLRenderer::new(),
+            renderer,
 
             semi_transparency: 0,
             texture_base: (0, 0),
