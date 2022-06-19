@@ -290,12 +290,32 @@ impl<R: Renderer> GPU<R> {
     }
 
     pub fn gp0_quad_mono_opaque(&mut self) -> Result<(), String> {
-        debug!("Draw quad");
+        let positions = [
+            Position::from_gp0(self.gp0_command[1]),
+            Position::from_gp0(self.gp0_command[2]),
+            Position::from_gp0(self.gp0_command[3]),
+            Position::from_gp0(self.gp0_command[4]),
+        ];
+
+        // Only one color repeated 4 times
+        let colors = [ Color::from_gp0(self.gp0_command[0]); 4];
+
+        self.renderer.push_quad(positions, colors);
         Ok(())
     }
 
     pub fn gp0_quad_texture_blend_opaque(&mut self) -> Result<(), String> {
-        debug!("Draw quad");
+        let positions = [
+            Position::from_gp0(self.gp0_command[1]),
+            Position::from_gp0(self.gp0_command[3]),
+            Position::from_gp0(self.gp0_command[5]),
+            Position::from_gp0(self.gp0_command[7]),
+        ];
+
+        // FIXME: This is just to see something, actually support textures...
+        let colors = [ Color { r: 0x80, g: 0x00, b: 0x00 }; 4];
+
+        self.renderer.push_quad(positions, colors);
         Ok(())
     }
 
@@ -317,7 +337,21 @@ impl<R: Renderer> GPU<R> {
     }
 
     pub fn gp0_quad_shaded_opaque(&mut self) -> Result<(), String> {
-        debug!("Draw shaded quad");
+        let positions = [
+            Position::from_gp0(self.gp0_command[1]),
+            Position::from_gp0(self.gp0_command[3]),
+            Position::from_gp0(self.gp0_command[5]),
+            Position::from_gp0(self.gp0_command[7]),
+        ];
+
+        let colors = [
+            Color::from_gp0(self.gp0_command[0]),
+            Color::from_gp0(self.gp0_command[2]),
+            Color::from_gp0(self.gp0_command[4]),
+            Color::from_gp0(self.gp0_command[6]),
+        ];
+
+        self.renderer.push_quad(positions, colors);
         Ok(())
     }
 

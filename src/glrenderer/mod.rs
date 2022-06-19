@@ -144,14 +144,31 @@ impl Drop for GLRenderer {
 
 impl Renderer for GLRenderer {
     fn push_triangle(&mut self, positions: [Position; 3], colors: [Color; 3]) {
-        // Make sure we have enough room left to queue the vertex
         if self.nvertices + 3 > VERTEX_BUFFER_LEN {
-            println!("Vertex attribute buffers full, forcing draw");
             self.draw();
         }
 
         for i in 0..3 {
-            // Push
+            self.positions.set(self.nvertices, positions[i]);
+            self.colors.set(self.nvertices, colors[i]);
+            self.nvertices += 1;
+        }
+    }
+
+    fn push_quad(&mut self, positions: [Position; 4], colors: [Color; 4]) {
+        if self.nvertices + 6 > VERTEX_BUFFER_LEN {
+            self.draw();
+        }
+
+        // Push the first triangle
+        for i in 0..3 {
+            self.positions.set(self.nvertices, positions[i]);
+            self.colors.set(self.nvertices, colors[i]);
+            self.nvertices += 1;
+        }
+
+        // Push the 2nd triangle
+        for i in 1..4 {
             self.positions.set(self.nvertices, positions[i]);
             self.colors.set(self.nvertices, colors[i]);
             self.nvertices += 1;
