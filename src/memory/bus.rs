@@ -11,19 +11,20 @@ use super::map;
 use super::map::MemoryRegion;
 use super::ram::RAM;
 
+use crate::renderer::Renderer;
 use std::string::String;
 
-pub struct Bus {
+pub struct Bus<R: Renderer> {
     bios: BIOS,
-    gpu: GPU,
+    gpu: GPU<R>,
     ram: RAM,
     dma: DMA,
 }
 
-impl Bus {
-    pub fn new(bios: BIOS, ram: RAM, gpu: GPU) -> Bus {
+impl<R: Renderer> Bus<R> {
+    pub fn new(bios: BIOS, ram: RAM, gpu: GPU<R>) -> Self {
         let dma = DMA::new();
-        Bus {
+        Self {
             bios,
             ram,
             gpu,

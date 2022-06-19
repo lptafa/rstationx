@@ -1,10 +1,9 @@
 use crate::utils;
 use crate::utils::Error;
 use crate::renderer::Renderer;
-use crate::renderer::gl_renderer::GLRenderer;
 use std::string::String;
 
-type Handler = fn(&mut GPU) -> Result<(), String>;
+type Handler<R> = fn(&mut GPU<R>) -> Result<(), String>;
 
 #[derive(Clone, Copy, Debug)]
 enum TextureDepth {
@@ -71,8 +70,8 @@ enum GP0Mode {
     Imageload,
 }
 
-pub struct GPU {
-    renderer: GLRenderer,
+pub struct GPU<R: Renderer> {
+    renderer: R,
 
     semi_transparency: u8,
     texture_base: (u8, u8),
@@ -105,15 +104,15 @@ pub struct GPU {
 
     gp0_command: CommandBuffer,
     gp0_command_remaining: u32,
-    gp0_command_method: Handler,
+    gp0_command_method: Handler<R>,
 
     gp0_mode: GP0Mode,
 }
 
-impl GPU {
-    pub fn new() -> GPU {
-        GPU {
-            renderer: GLRenderer::new(),
+impl<R: Renderer> GPU<R> {
+    pub fn new(renderer: R) -> Self {
+        Self {
+            renderer,
 
             semi_transparency: 0,
             texture_base: (0, 0),
@@ -205,7 +204,7 @@ impl GPU {
         if self.gp0_command_remaining == 0 {
             let opcode = (val >> 24) & 0xff;
 
-            let (len, method): (u32, Handler) = match opcode {
+            let (len, method): (u32, Handler<R>) = match opcode {
                 0x00 => (1, GPU::gp0_nop),
                 0x01 => (1, GPU::gp0_clear_cache),
                 0x28 => (5, GPU::gp0_quad_mono_opaque),
