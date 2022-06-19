@@ -1,6 +1,6 @@
+use crate::renderer::Renderer;
 use crate::utils;
 use crate::utils::Error;
-use crate::renderer::Renderer;
 use std::string::String;
 
 type Handler<R> = fn(&mut GPU<R>) -> Result<(), String>;
@@ -68,6 +68,38 @@ struct DrawingArea {
 enum GP0Mode {
     Command,
     Imageload,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Position {
+    pub x: i16,
+    pub y: i16,
+}
+
+impl Position {
+    pub fn from_gp0(val: u32) -> Position {
+        let x = val as i16;
+        let y = (val >> 16) as i16;
+
+        Position { x, y }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Color {
+    pub fn from_gp0(val: u32) -> Color {
+        let r = val as u8;
+        let g = (val >> 8) as u8;
+        let b = (val >> 16) as u8;
+
+        Color { r, g, b }
+    }
 }
 
 pub struct GPU<R: Renderer> {
@@ -268,7 +300,19 @@ impl<R: Renderer> GPU<R> {
     }
 
     pub fn gp0_triangle_shaded_opaque(&mut self) -> Result<(), String> {
-        debug!("Draw shaded quad");
+        let positions = [
+            Position::from_gp0(self.gp0_command[1]),
+            Position::from_gp0(self.gp0_command[3]),
+            Position::from_gp0(self.gp0_command[5]),
+        ];
+
+        let colors = [
+            Color::from_gp0(self.gp0_command[0]),
+            Color::from_gp0(self.gp0_command[2]),
+            Color::from_gp0(self.gp0_command[4]),
+        ];
+
+        self.renderer.push_triangle(positions, colors);
         Ok(())
     }
 
@@ -300,7 +344,6 @@ impl<R: Renderer> GPU<R> {
 
         debug!("Unhandled image store {}x{}", width, height);
         Ok(())
-
     }
 
     fn gp0_draw_mode(&mut self) -> Result<(), String> {
@@ -365,6 +408,10 @@ impl<R: Renderer> GPU<R> {
         let y_se = ((y << 5) as i16) >> 5;
 
         self.drawing_offset = (x_se, y_se);
+
+        // FIXME: This is a hack till we have better timings
+        self.renderer.display();
+
         Ok(())
     }
 

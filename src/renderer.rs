@@ -1,3 +1,7 @@
+use crate::gpu::{Color, Position};
+
 pub trait Renderer {
-    // TODO: Add stuff
+    fn push_triangle(&mut self, positions: [Position; 3], colors: [Color; 3]);
+    fn draw(&mut self);
+    fn display(&mut self);
 }

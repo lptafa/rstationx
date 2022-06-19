@@ -1,11 +1,11 @@
 // #![allow(dead_code)]
 mod bios;
 mod cpu;
+mod glrenderer;
 mod gpu;
 mod memory;
-mod utils;
 mod renderer;
-mod opengl_renderer;
+mod utils;
 
 #[macro_use]
 extern crate log;
@@ -13,7 +13,7 @@ extern crate env_logger;
 extern crate gl;
 extern crate sdl2;
 
-use sdl2::{event::Event};
+use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
 fn main() {
@@ -24,7 +24,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let renderer = opengl_renderer::GLRenderer::new(sdl_context);
+    let renderer = glrenderer::GLRenderer::new(sdl_context);
 
     let bios_path = std::path::Path::new("./bios/bios");
     let bios = bios::BIOS::new(bios_path).unwrap();
@@ -41,8 +41,11 @@ fn main() {
 
         for e in event_pump.poll_iter() {
             match e {
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => return,
-                Event::Quit {..} => return,
+                Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => return,
+                Event::Quit { .. } => return,
                 _ => (),
             }
         }

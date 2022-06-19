@@ -3,8 +3,8 @@ mod instruction;
 use self::instruction::{Instruction, RegisterIndex};
 use crate::memory::Bus;
 use crate::memory::BIOS_START;
-use crate::utils::Error;
 use crate::renderer::Renderer;
+use crate::utils::Error;
 use log::debug;
 use std::string::String;
 
