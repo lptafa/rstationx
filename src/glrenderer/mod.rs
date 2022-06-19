@@ -23,6 +23,7 @@ pub struct GLRenderer {
     positions: Buffer<Position>,
     colors: Buffer<Color>,
     nvertices: u32,
+    uniform_offset: GLint,
 }
 
 impl GLRenderer {
@@ -51,19 +52,22 @@ impl GLRenderer {
             "
             #version 330 core
 
+            uniform ivec2 offset;
+
             in ivec2 vertex_position;
             in uvec3 vertex_color;
 
             out vec3 color;
 
             void main() {
-            float xpos = (float(vertex_position.x) / 512) - 1.0;
-            float ypos = 1.0 - (float(vertex_position.y) / 256);
+                ivec2 position = vertex_position + offset;
+                float xpos = (float(position.x) / 512) - 1.0;
+                float ypos = 1.0 - (float(position.y) / 256);
 
-            gl_Position.xyzw = vec4(xpos, ypos, 0.0, 1.0);
-            color = vec3(float(vertex_color.r) / 255,
-                         float(vertex_color.g) / 255,
-                         float(vertex_color.b) / 255);
+                gl_Position.xyzw = vec4(xpos, ypos, 0.0, 1.0);
+                color = vec3(float(vertex_color.r) / 255,
+                            float(vertex_color.g) / 255,
+                            float(vertex_color.b) / 255);
             }
         ",
         );
@@ -115,6 +119,9 @@ impl GLRenderer {
             gl::VertexAttribIPointer(index, 3, gl::UNSIGNED_BYTE, 0, ptr::null());
         }
 
+        let uniform_offset = find_program_uniform(program, "offset");
+        unsafe { gl::Uniform2i(uniform_offset, 0, 0) }
+
         GLRenderer {
             sdl_context,
             window,
@@ -127,6 +134,7 @@ impl GLRenderer {
             positions,
             colors,
             nvertices: 0,
+            uniform_offset,
         }
     }
 }
@@ -200,6 +208,18 @@ impl Renderer for GLRenderer {
         self.draw();
         self.window.gl_swap_window();
     }
+
+    fn set_draw_offset(&mut self, position: Position) {
+        self.draw();
+
+        unsafe {
+            gl::Uniform2i(
+                self.uniform_offset,
+                position.x as GLint,
+                position.y as GLint,
+            );
+        }
+    }
 }
 
 fn compile_shader(kind: gl::types::GLenum, source: &str) -> GLuint {
@@ -244,4 +264,13 @@ pub fn find_program_attrib(program: GLuint, attr: &str) -> GLuint {
         panic!("Attribute \"{}\" not found in program ({})", attr, index);
     }
     index as GLuint
+}
+
+pub fn find_program_uniform(program: GLuint, attr: &str) -> GLint {
+    let cstr = CString::new(attr).unwrap();
+    let index = unsafe { gl::GetUniformLocation(program, cstr.as_ptr()) };
+    if index < 0 {
+        panic!("Uniform \"{}\" not found in program ({})", attr, index);
+    }
+    index as GLint
 }

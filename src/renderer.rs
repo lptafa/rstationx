@@ -5,4 +5,5 @@ pub trait Renderer {
     fn push_quad(&mut self, positions: [Position; 4], colors: [Color; 4]);
     fn draw(&mut self);
     fn display(&mut self);
+    fn set_draw_offset(&mut self, position: Position);
 }

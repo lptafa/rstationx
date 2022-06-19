@@ -129,7 +129,6 @@ pub struct GPU<R: Renderer> {
     texture_window_mask: (u8, u8),
     texture_window_offset: (u8, u8),
     drawing_area: DrawingArea,
-    drawing_offset: (i16, i16),
     display_vram_start: (u16, u16),
     display_horiz_range: (u16, u16),
     display_line_range: (u16, u16),
@@ -175,7 +174,6 @@ impl<R: Renderer> GPU<R> {
                 top: 0,
                 bottom: 0,
             },
-            drawing_offset: (0, 0),
             display_vram_start: (0, 0),
             display_horiz_range: (0, 0),
             display_line_range: (0, 0),
@@ -298,7 +296,7 @@ impl<R: Renderer> GPU<R> {
         ];
 
         // Only one color repeated 4 times
-        let colors = [ Color::from_gp0(self.gp0_command[0]); 4];
+        let colors = [Color::from_gp0(self.gp0_command[0]); 4];
 
         self.renderer.push_quad(positions, colors);
         Ok(())
@@ -313,7 +311,11 @@ impl<R: Renderer> GPU<R> {
         ];
 
         // FIXME: This is just to see something, actually support textures...
-        let colors = [ Color { r: 0x80, g: 0x00, b: 0x00 }; 4];
+        let colors = [Color {
+            r: 0x80,
+            g: 0x00,
+            b: 0x00,
+        }; 4];
 
         self.renderer.push_quad(positions, colors);
         Ok(())
@@ -438,10 +440,10 @@ impl<R: Renderer> GPU<R> {
         let x = (val & 0x7ff) as u16;
         let y = ((val >> 11) & 0x7ff) as u16;
 
-        let x_se = ((x << 5) as i16) >> 5; // what the fuck
-        let y_se = ((y << 5) as i16) >> 5;
+        let x = ((x << 5) as i16) >> 5; // what the fuck
+        let y = ((y << 5) as i16) >> 5;
 
-        self.drawing_offset = (x_se, y_se);
+        self.renderer.set_draw_offset(Position { x, y });
 
         // FIXME: This is a hack till we have better timings
         self.renderer.display();
@@ -494,7 +496,6 @@ impl<R: Renderer> GPU<R> {
             top: 0,
             bottom: 0,
         };
-        self.drawing_offset = (0, 0);
         self.force_set_mask_bit = false;
         self.preserve_masked_pixels = false;
 
