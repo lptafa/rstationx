@@ -12,6 +12,8 @@ enum TextureDepth {
     T15 = 2,
 }
 
+// FIXME: Remove this eventually
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 enum Field {
     Bottom = 0,
@@ -57,7 +59,9 @@ enum DMADirection {
     VRAM2CPU = 3,
 }
 
-#[derive(Clone, Copy, Debug)]
+// FIXME: Remove this eventually
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
 struct DrawingArea {
     left: u16,
     right: u16,

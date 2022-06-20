@@ -4,13 +4,14 @@ use gl;
 use gl::types::{GLint, GLsizei, GLuint};
 use sdl2;
 use std::ffi::{c_void, CString};
-use std::io::{self, Write};
 use std::ptr;
 
 use crate::gpu::{Color, Position};
 use crate::renderer::Renderer;
 use buffer::{Buffer, VERTEX_BUFFER_LEN};
 
+// FIXME: Remove this eventually
+#[allow(dead_code)]
 pub struct GLRenderer {
     sdl_context: sdl2::Sdl,
     window: sdl2::video::Window,
