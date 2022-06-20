@@ -16,9 +16,6 @@ extern crate sdl2;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
-use crate::renderer::gl_renderer::GLRenderer;
-use glium::glutin;
-
 fn main() {
     env_logger::Builder::from_default_env()
         .format_timestamp(None)
