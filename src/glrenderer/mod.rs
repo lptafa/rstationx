@@ -92,12 +92,6 @@ impl GLRenderer {
         // Clear the window
         unsafe {
             gl::UseProgram(program);
-
-            // FIXME: I'm not sure why on macOS we need to clear both display buffers.
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-            window.gl_swap_window();
-            gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
         // Generate our vertex attribute object that will hold our vertex attributes
@@ -193,9 +187,7 @@ impl Renderer for GLRenderer {
     fn draw(&mut self) {
         // Make sure all the data from the persistent mappings is flushed to the buffer
         unsafe {
-            if !cfg!(target_os = "macos") {
-                gl::MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT);
-            }
+            gl::MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT);
             gl::DrawArrays(gl::TRIANGLES, 0, self.nvertices as GLsizei);
 
             let sync = gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
